@@ -1,0 +1,7 @@
+player_data/
+game_data/
+cache/
+public/
+node_modules/
+.git/
+*.md

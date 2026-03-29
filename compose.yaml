@@ -1,0 +1,12 @@
+services:
+  osrs:
+    build: .
+    container_name: osrs
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./player_data:/app/player_data
+      - ./game_data:/app/game_data
+      - ./cache:/app/cache
+      - ./public:/app/public

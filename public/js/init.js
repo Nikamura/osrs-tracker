@@ -1,21 +1,47 @@
 // Apply initial states immediately to prevent flashing
 (function() {
   try {
+    function storedStringArray(key) {
+      const saved = localStorage.getItem(key);
+      if (!saved) return null;
+      try {
+        const parsed = JSON.parse(saved);
+        return Array.isArray(parsed) ? parsed.filter(value => typeof value === 'string') : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function storedObject(key) {
+      const saved = localStorage.getItem(key);
+      if (!saved) return null;
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
     // Apply window visibility immediately
-    const savedWindows = localStorage.getItem('osrs-selected-windows');
-    if (savedWindows) {
-      const selectedWindows = JSON.parse(savedWindows);
+    const selectedWindows = storedStringArray('osrs-selected-windows');
+    if (selectedWindows) {
+      const storedCatalogVersion = Number(localStorage.getItem('osrs-window-catalog-version'));
+      const seenCatalogVersion = Number.isInteger(storedCatalogVersion) && storedCatalogVersion >= 1
+        ? storedCatalogVersion
+        : 1;
       const allWindows = document.querySelectorAll('.window[data-window-id]');
       allWindows.forEach(function(windowElement) {
         const windowId = windowElement.dataset.windowId;
-        if (selectedWindows.indexOf(windowId) === -1) {
+        const introducedVersion = Number(windowElement.dataset.introducedVersion || 1);
+        if (selectedWindows.indexOf(windowId) === -1 && introducedVersion <= seenCatalogVersion) {
           windowElement.classList.add('hidden');
         }
       });
     }
 
     // Apply minimized states immediately
-    const savedStates = JSON.parse(localStorage.getItem('osrs-minimized-windows') || '{}');
+    const savedStates = storedObject('osrs-minimized-windows') || {};
     document.querySelectorAll('.window').forEach(function(windowElement) {
       const titleText = windowElement.querySelector('.title-bar-text');
       if (titleText) {

@@ -9,6 +9,9 @@ let totalLevelChart = null;
 let totalExpChart = null;
 let skillLevelChart = null;
 let showOnlyMajorAchievements = false;
+let sailingExplorerPlayer = null;
+let sailingExplorerStatus = 'missing';
+let sailingExplorerGroup = 'all';
 
 // Create player mapping objects from config
 let displayToPlayer = {};
@@ -98,6 +101,39 @@ function safeWikiUrl(value) {
   return '#';
 }
 
+function safePlayerColor(player) {
+  const configuredColor = playerColors[player];
+  return /^#[0-9a-f]{6}$/i.test(configuredColor || '') ? configuredColor : '#008080';
+}
+
+function readStoredStringArray(key) {
+  const saved = localStorage.getItem(key);
+  if (!saved) return null;
+  try {
+    const parsed = JSON.parse(saved);
+    if (!Array.isArray(parsed)) return null;
+    return [...new Set(parsed.filter(value => typeof value === 'string'))];
+  } catch {
+    return null;
+  }
+}
+
+function readStoredObject(key) {
+  const saved = localStorage.getItem(key);
+  if (!saved) return null;
+  try {
+    const parsed = JSON.parse(saved);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readWindowCatalogVersion() {
+  const value = Number(localStorage.getItem('osrs-window-catalog-version'));
+  return Number.isInteger(value) && value >= 1 ? value : 1;
+}
+
 function getRankingClass(value, rank) {
   if (value > 0) {
     if (rank === 1) return ' rank-1st';
@@ -179,7 +215,13 @@ function saveTotalXpLogScalePreference(isLog) {
 
 function loadTotalXpLogScalePreference() {
   const saved = localStorage.getItem('osrs-totalxp-log-scale');
-  return saved ? JSON.parse(saved) : true; // default to logarithmic
+  if (!saved) return true;
+  try {
+    const parsed = JSON.parse(saved);
+    return typeof parsed === 'boolean' ? parsed : true;
+  } catch {
+    return true;
+  }
 }
 
 function applyTotalXpScale(isLog) {
@@ -291,6 +333,9 @@ function updatePlayerSelection() {
   updateCollectionLogTable(selectedPlayers);
   updateAchievementsTable(selectedPlayers);
   updateActivitiesTable(selectedPlayers);
+  renderPlayerOverview(selectedPlayers);
+  renderSailingProgress(selectedPlayers);
+  renderSeaChartingExplorer(selectedPlayers);
 
   // Save selection state
   savePlayerSelection(selectedPlayers);
@@ -344,18 +389,24 @@ function saveWindowVisibility(selectedWindows) {
 }
 
 function loadWindowVisibility() {
-  const saved = localStorage.getItem('osrs-selected-windows');
-  if (saved) {
-    const selectedWindows = JSON.parse(saved);
+  const configuredCatalogVersion = Number(document.body.dataset.windowCatalogVersion);
+  const currentCatalogVersion = Number.isInteger(configuredCatalogVersion) && configuredCatalogVersion >= 1
+    ? configuredCatalogVersion
+    : 1;
+  const seenCatalogVersion = readWindowCatalogVersion();
+  const selectedWindows = readStoredStringArray('osrs-selected-windows');
+  if (selectedWindows) {
     const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="window-"]');
     checkboxes.forEach(cb => {
-      cb.checked = selectedWindows.includes(cb.value);
+      const introducedVersion = Number(cb.dataset.introducedVersion || 1);
+      cb.checked = selectedWindows.includes(cb.value) || introducedVersion > seenCatalogVersion;
     });
     updateWindowVisibility();
   } else {
     // If no saved state, just update visual indicators for initial state
     updateWindowVisualIndicators();
   }
+  localStorage.setItem('osrs-window-catalog-version', String(currentCatalogVersion));
 }
 
 function selectAllPlayers() {
@@ -375,9 +426,8 @@ function savePlayerSelection(selectedPlayers) {
 }
 
 function loadPlayerSelection() {
-  const saved = localStorage.getItem('osrs-selected-players');
-  if (saved) {
-    const selectedPlayers = JSON.parse(saved);
+  const selectedPlayers = readStoredStringArray('osrs-selected-players');
+  if (selectedPlayers) {
     const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="player-"]');
     checkboxes.forEach(cb => {
       cb.checked = selectedPlayers.includes(cb.value);
@@ -868,7 +918,7 @@ function initializeWindowAccessibility() {
 
 // Load minimized states from localStorage
 function loadMinimizedStates() {
-  const savedStates = JSON.parse(localStorage.getItem('osrs-minimized-windows') || '{}');
+  const savedStates = readStoredObject('osrs-minimized-windows') || {};
   document.querySelectorAll('.window').forEach(windowElement => {
     const windowId = getWindowId(windowElement);
     if (savedStates[windowId]) {
@@ -890,7 +940,7 @@ function saveMinimizedStates() {
 
 // Load window order from localStorage
 function loadWindowOrder() {
-  const savedOrder = JSON.parse(localStorage.getItem('osrs-window-order') || '[]');
+  const savedOrder = readStoredStringArray('osrs-window-order') || [];
   if (savedOrder.length === 0) return;
 
   const container = document.querySelector('.container');
@@ -903,20 +953,29 @@ function loadWindowOrder() {
     windowMap[windowId] = windowElement;
   });
 
-  // Reorder windows based on saved order
-  savedOrder.forEach(windowId => {
-    if (windowMap[windowId]) {
-      container.appendChild(windowMap[windowId]);
-    }
-  });
-
-  // Append any windows not in the saved order (new windows)
-  windows.forEach(windowElement => {
+  const seenCatalogVersion = readWindowCatalogVersion();
+  const introducedWindows = windows.filter(windowElement => {
     const windowId = getWindowId(windowElement);
-    if (!savedOrder.includes(windowId)) {
-      container.appendChild(windowElement);
-    }
+    const introducedVersion = Number(windowElement.dataset.introducedVersion || 1);
+    return !savedOrder.includes(windowId) && introducedVersion > seenCatalogVersion;
   });
+  const introducedWindowIds = new Set(introducedWindows.map(getWindowId));
+  const orderedWindows = savedOrder.map(windowId => windowMap[windowId]).filter(Boolean);
+
+  for (const windowElement of windows) {
+    const windowId = getWindowId(windowElement);
+    if (!savedOrder.includes(windowId) && !introducedWindowIds.has(windowId)) {
+      orderedWindows.push(windowElement);
+    }
+  }
+
+  const configurationIndex = orderedWindows.findIndex(windowElement => getWindowId(windowElement) === 'configuration');
+  orderedWindows.splice(configurationIndex >= 0 ? configurationIndex + 1 : 0, 0, ...introducedWindows);
+  orderedWindows.forEach(windowElement => container.appendChild(windowElement));
+
+  // Persist the migrated order so the new windows remain near Configuration
+  // after the catalog version is marked as seen.
+  if (introducedWindows.length > 0) saveWindowOrder();
 }
 
 // Save window order to localStorage
@@ -1163,12 +1222,20 @@ function getDragAfterElement(container, y) {
 
 // Listen for storage changes from other windows/tabs
 window.addEventListener('storage', function(e) {
-  if (e.key === 'osrs-window-change') {
-    const change = JSON.parse(e.newValue);
-    syncWindowStates(change.windowId, change.isMinimized);
-  } else if (e.key === 'osrs-order-change') {
-    const change = JSON.parse(e.newValue);
-    syncWindowOrder(change.order);
+  try {
+    if (e.key === 'osrs-window-change') {
+      const change = JSON.parse(e.newValue);
+      if (typeof change?.windowId === 'string' && typeof change?.isMinimized === 'boolean') {
+        syncWindowStates(change.windowId, change.isMinimized);
+      }
+    } else if (e.key === 'osrs-order-change') {
+      const change = JSON.parse(e.newValue);
+      if (Array.isArray(change?.order)) {
+        syncWindowOrder(change.order.filter(windowId => typeof windowId === 'string'));
+      }
+    }
+  } catch {
+    // Ignore malformed cross-tab state and keep the current page usable.
   }
 });
 
@@ -1959,6 +2026,285 @@ function generateAchievementsTable(achievementsData) {
   return tableHtml;
 }
 
+function formatOverviewNumber(value, { compact = false } = {}) {
+  if (!Number.isFinite(value)) return '\u2014';
+  return new Intl.NumberFormat('en-US', compact ? {
+    notation: 'compact',
+    maximumFractionDigits: 1
+  } : {}).format(value);
+}
+
+function formatSnapshotTime(value) {
+  const timestamp = new Date(value);
+  if (!Number.isFinite(timestamp.getTime())) return 'Snapshot time unavailable';
+  return `Snapshot ${timestamp.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Europe/Vilnius'
+  })}`;
+}
+
+function renderPlayerOverview(selectedPlayers = getSelectedPlayers()) {
+  const container = document.getElementById('player-overview-container');
+  const data = tableData?.playerOverview;
+  if (!container || !data) return;
+
+  const players = data.players.filter(player => selectedPlayers.includes(player));
+  if (players.length === 0) {
+    container.innerHTML = '<p class="empty-panel-message">Select at least one player to see an overview.</p>';
+    return;
+  }
+
+  const cards = players.map(player => {
+    const stats = data.playerStats[player];
+    const metrics = [
+      ['Total level', formatOverviewNumber(stats.totalLevel)],
+      ['Total XP', formatOverviewNumber(stats.totalExperience, { compact: true })],
+      ['Quests', `${formatOverviewNumber(stats.completedQuests)}/${formatOverviewNumber(data.totals.quests)}`],
+      ['Collection log', formatOverviewNumber(stats.collectionLog)],
+      ['Combat tasks', `${formatOverviewNumber(stats.combatAchievements)}/${formatOverviewNumber(data.totals.combatAchievements)}`],
+      ['Sailing', stats.sailingLevel === null ? '\u2014' : `Level ${formatOverviewNumber(stats.sailingLevel)}`]
+    ];
+    const metricHtml = metrics.map(([label, value]) => `
+      <div class="overview-metric">
+        <span class="overview-metric-label">${escapeHtml(label)}</span>
+        <strong class="overview-metric-value">${escapeHtml(value)}</strong>
+      </div>`).join('');
+
+    return `
+      <article class="overview-card" style="--player-accent: ${safePlayerColor(player)};" aria-label="${escapeHtml(getDisplayName(player))} overview">
+        <header class="overview-card-header">
+          <strong>${escapeHtml(getDisplayName(player))}</strong>
+          <span>${escapeHtml(formatSnapshotTime(stats.snapshotAt))}</span>
+        </header>
+        <div class="overview-metrics">${metricHtml}</div>
+      </article>`;
+  }).join('');
+
+  container.innerHTML = `<div class="overview-grid">${cards}</div>`;
+}
+
+function sailingProgressPercentage(completed, total) {
+  if (!Number.isFinite(completed) || !Number.isFinite(total) || total <= 0) return 0;
+  return Math.max(0, Math.min(100, (completed / total) * 100));
+}
+
+function sailingProgressBar(completed, total, label) {
+  const percentage = sailingProgressPercentage(completed, total);
+  return `
+    <div class="sailing-progress-track" role="progressbar" aria-label="${escapeHtml(label)}" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${completed}">
+      <span style="width: ${percentage.toFixed(2)}%;"></span>
+    </div>`;
+}
+
+function setSailingExplorerPlayer(player) {
+  sailingExplorerPlayer = player;
+  renderSeaChartingExplorer(getSelectedPlayers());
+  document.getElementById('sailing-explorer-player')?.focus();
+}
+
+function setSailingExplorerStatus(status) {
+  sailingExplorerStatus = ['all', 'missing', 'completed'].includes(status) ? status : 'missing';
+  renderSeaChartingExplorer(getSelectedPlayers());
+  document.getElementById('sailing-explorer-status')?.focus();
+}
+
+function setSailingExplorerGroup(group) {
+  sailingExplorerGroup = group;
+  renderSeaChartingExplorer(getSelectedPlayers());
+  document.getElementById('sailing-explorer-group')?.focus();
+}
+
+function sailingExplorerMarkup(data, player, selectablePlayers) {
+  const progress = data.playerProgress[player];
+  const allGroups = data.completionGroups.map(group => group.name);
+  if (sailingExplorerGroup !== 'all' && !allGroups.includes(sailingExplorerGroup)) {
+    sailingExplorerGroup = 'all';
+  }
+
+  const groupOptions = data.completionGroups.map(group =>
+    `<option value="${escapeHtml(group.name)}" ${group.name === sailingExplorerGroup ? 'selected' : ''}>${escapeHtml(group.name)}</option>`
+  ).join('');
+  const playerOptions = selectablePlayers.map(playerName =>
+    `<option value="${escapeHtml(playerName)}" ${playerName === player ? 'selected' : ''}>${escapeHtml(getDisplayName(playerName))}</option>`
+  ).join('');
+
+  const controls = `
+    <div class="sailing-explorer-controls">
+      <label>Player
+        <select id="sailing-explorer-player" onchange="setSailingExplorerPlayer(this.value)">${playerOptions}</select>
+      </label>
+      <label>Chart area
+        <select id="sailing-explorer-group" onchange="setSailingExplorerGroup(this.value)">
+          <option value="all" ${sailingExplorerGroup === 'all' ? 'selected' : ''}>All areas</option>
+          ${groupOptions}
+        </select>
+      </label>
+      <label>Status
+        <select id="sailing-explorer-status" onchange="setSailingExplorerStatus(this.value)">
+          <option value="missing" ${sailingExplorerStatus === 'missing' ? 'selected' : ''}>Missing</option>
+          <option value="completed" ${sailingExplorerStatus === 'completed' ? 'selected' : ''}>Completed</option>
+          <option value="all" ${sailingExplorerStatus === 'all' ? 'selected' : ''}>All</option>
+        </select>
+      </label>
+    </div>`;
+
+  if (!progress?.available) {
+    return `${controls}<p class="empty-panel-message">WikiSync has not supplied sea-charting progress for this player yet.</p>`;
+  }
+
+  const completed = new Set(progress.completedTaskIds);
+  const filteredTasks = data.tasks.filter(task => {
+    const groupMatches = sailingExplorerGroup === 'all' || task.completionGroup === sailingExplorerGroup;
+    const isCompleted = completed.has(task.taskId);
+    const statusMatches = sailingExplorerStatus === 'all'
+      || (sailingExplorerStatus === 'completed' && isCompleted)
+      || (sailingExplorerStatus === 'missing' && !isCompleted);
+    return groupMatches && statusMatches;
+  });
+
+  const grouped = new Map();
+  for (const task of filteredTasks) {
+    if (!grouped.has(task.completionGroup)) grouped.set(task.completionGroup, new Map());
+    const seas = grouped.get(task.completionGroup);
+    if (!seas.has(task.sea)) seas.set(task.sea, []);
+    seas.get(task.sea).push(task);
+  }
+
+  const groupOrder = ['Ardent Ocean', 'Unquiet Ocean', 'Shrouded Ocean', 'Western Ocean', 'Northern Ocean', 'Sunset Ocean', 'Miscellaneous'];
+  const groupRank = groupName => {
+    const index = groupOrder.indexOf(groupName);
+    return index === -1 ? groupOrder.length : index;
+  };
+  const groupHtml = [...grouped.entries()]
+    .sort(([left], [right]) => groupRank(left) - groupRank(right) || left.localeCompare(right))
+    .map(([groupName, seas]) => {
+      const group = data.completionGroups.find(item => item.name === groupName);
+      const groupCompleted = group.taskIds.filter(taskId => completed.has(taskId)).length;
+      const seaHtml = [...seas.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([seaName, tasks]) => {
+        const allSeaTasks = data.tasks.filter(task =>
+          task.sea === seaName && task.completionGroup === groupName
+        );
+        const seaCompleted = allSeaTasks.filter(task => completed.has(task.taskId)).length;
+        const seaLink = tasks[0]?.seaWikiLink;
+        const taskHtml = tasks.sort((a, b) => a.level - b.level || a.taskId - b.taskId).map(task => {
+          const isCompleted = completed.has(task.taskId);
+          const details = [
+            `Level ${task.level}`,
+            task.type,
+            task.isBonusChart ? 'Bonus chart' : null,
+            task.hazard ? `Hazard: ${task.hazard}` : null
+          ].filter(Boolean).join(' \u00b7 ');
+          return `
+            <li class="sailing-task ${isCompleted ? 'is-complete' : 'is-missing'}">
+              <span class="sailing-task-state" aria-hidden="true">${isCompleted ? '\u2713' : '\u25a1'}</span>
+              <span>
+                <strong>${escapeHtml(details)}</strong>
+                <span class="sailing-task-copy">${escapeHtml(task.task)}</span>
+                <span class="visually-hidden">${isCompleted ? 'Completed' : 'Missing'}</span>
+              </span>
+            </li>`;
+        }).join('');
+
+        return `
+          <details class="sailing-sea-group">
+            <summary>
+              <span>${escapeHtml(seaName)}</span>
+              <strong>${seaCompleted}/${allSeaTasks.length}</strong>
+            </summary>
+            <div class="sailing-sea-body">
+              ${seaLink ? `<a href="${safeWikiUrl(seaLink)}" target="_blank" rel="noopener noreferrer">Open ${escapeHtml(seaName)} on the OSRS Wiki</a>` : ''}
+              <ul class="sailing-task-list">${taskHtml}</ul>
+            </div>
+          </details>`;
+      }).join('');
+
+      const groupIsFiltered = sailingExplorerGroup === groupName;
+      return `
+        <details class="sailing-chart-group" aria-label="${escapeHtml(groupName)} sea-charting progress" ${groupIsFiltered ? 'open' : ''}>
+          <summary class="sailing-chart-group-heading">
+            <strong class="sailing-chart-group-title">${escapeHtml(groupName)}</strong>
+            <span>${groupCompleted}/${group.taskIds.length}</span>
+          </summary>
+          <div class="sailing-chart-group-body">
+            ${sailingProgressBar(groupCompleted, group.taskIds.length, `${groupName}: ${groupCompleted} of ${group.taskIds.length} tasks completed`)}
+            ${seaHtml}
+          </div>
+        </details>`;
+    }).join('');
+
+  return `
+    ${controls}
+    <div class="sailing-explorer-results">
+      ${groupHtml || '<p class="empty-panel-message">No charting tasks match these filters.</p>'}
+    </div>`;
+}
+
+function renderSailingProgress(selectedPlayers = getSelectedPlayers()) {
+  const container = document.getElementById('sailing-progress-container');
+  const data = tableData?.sailing;
+  if (!container || !data) return;
+
+  const players = data.players.filter(player => selectedPlayers.includes(player));
+  if (players.length === 0) {
+    container.innerHTML = '<p class="empty-panel-message">Select at least one player to see Sailing progress.</p>';
+    return;
+  }
+
+  const cards = players.map(player => {
+    const progress = data.playerProgress[player];
+    const completed = progress.available ? progress.completedTaskIds.length : null;
+    const charts = completed === null ? 'No WikiSync data' : `${completed}/${data.totalTasks} charted`;
+    const unknown = progress.unknownTaskIds.length > 0
+      ? `<span class="sailing-metadata-warning">${progress.unknownTaskIds.length} newer task ID${progress.unknownTaskIds.length === 1 ? '' : 's'} awaiting metadata</span>`
+      : '';
+    return `
+      <article class="sailing-player-card" style="--player-accent: ${safePlayerColor(player)};">
+        <div class="sailing-player-heading">
+          <strong>${escapeHtml(getDisplayName(player))}</strong>
+          <span>Sailing ${progress.sailingLevel ?? '\u2014'}</span>
+        </div>
+        <div class="sailing-player-total">${escapeHtml(charts)}</div>
+        ${completed === null ? '' : sailingProgressBar(completed, data.totalTasks, `${getDisplayName(player)}: ${completed} of ${data.totalTasks} sea-charting tasks completed`)}
+        ${unknown}
+      </article>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="sailing-intro">
+      <strong>Fleet progress</strong>
+      <span>Latest Sailing level and Captain's log completion across ${data.totalTasks} charts.</span>
+      <a href="${safeWikiUrl(data.sourceUrl)}" target="_blank" rel="noopener noreferrer">OSRS Wiki source</a>
+    </div>
+    <div class="sailing-player-grid">${cards}</div>
+    <p class="sailing-data-note">Completion comes from each player's latest WikiSync snapshot; it does not confirm that an island was visited.</p>`;
+}
+
+function renderSeaChartingExplorer(selectedPlayers = getSelectedPlayers()) {
+  const container = document.getElementById('sea-charting-explorer-container');
+  const data = tableData?.sailing;
+  if (!container || !data) return;
+
+  const players = data.players.filter(player => selectedPlayers.includes(player));
+  if (players.length === 0) {
+    container.innerHTML = '<p class="empty-panel-message">Select at least one player to explore sea-charting tasks.</p>';
+    return;
+  }
+
+  if (!players.includes(sailingExplorerPlayer)) sailingExplorerPlayer = players[0];
+  container.innerHTML = `
+    <div class="sailing-intro">
+      <strong>Captain's log</strong>
+      <span>Filter ${data.totalTasks} exact chart tasks by player, completion area and status.</span>
+      <a href="${safeWikiUrl(data.sourceUrl)}" target="_blank" rel="noopener noreferrer">OSRS Wiki source</a>
+    </div>
+    <p class="sailing-data-note">Chart completion is from WikiSync; it is not proof that an island was visited, docked at or unlocked.</p>
+    ${sailingExplorerMarkup(data, sailingExplorerPlayer, players)}`;
+}
+
 function renderTables() {
   document.getElementById('quest-table-container').innerHTML = generateQuestComparisonTable(tableData.quests);
   document.getElementById('level-table-container').innerHTML = generateLevelComparisonTable(tableData.levels);
@@ -1968,6 +2314,9 @@ function renderTables() {
   document.getElementById('collection-log-table-container').innerHTML = generateCollectionLogComparisonTable(tableData.collectionLog);
   document.getElementById('activities-table-container').innerHTML = generateActivitiesComparisonTable(tableData.activities);
   document.getElementById('achievements-table-container').innerHTML = generateAchievementsTable(tableData.achievements);
+  renderPlayerOverview();
+  renderSailingProgress();
+  renderSeaChartingExplorer();
 }
 
 function cloneChartData(data) {

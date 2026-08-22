@@ -430,7 +430,8 @@ body {
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
-a:focus-visible {
+a:focus-visible,
+summary:focus-visible {
   outline: 2px solid #000080;
   outline-offset: 2px;
 }
@@ -495,6 +496,267 @@ a:focus-visible {
 
 .combat-achievement-not-completed {
   background-color: #cccccc;
+}
+
+/* Compact, card-based summaries avoid another wide comparison table. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.empty-panel-message {
+  margin: 8px;
+}
+
+.overview-grid,
+.sailing-player-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.overview-card,
+.sailing-player-card {
+  min-width: 0;
+  padding: 8px;
+  border-left: 6px solid var(--player-accent, #008080);
+  background: #c0c0c0;
+  box-shadow: inset -1px -1px #808080, inset 1px 1px #ffffff;
+}
+
+.overview-card-header,
+.sailing-player-heading,
+.sailing-chart-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.overview-card-header {
+  margin-bottom: 7px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #808080;
+}
+
+.overview-card-header span {
+  color: #444444;
+  font-size: 11px;
+  text-align: right;
+}
+
+.overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.overview-metric {
+  min-width: 0;
+  padding: 6px;
+  background: #ffffff;
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080;
+}
+
+.overview-metric-label,
+.overview-metric-value {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.overview-metric-label {
+  color: #555555;
+  font-size: 11px;
+}
+
+.sailing-intro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #000080;
+  color: #ffffff;
+}
+
+.sailing-intro a {
+  color: #ffffff;
+}
+
+.sailing-player-grid {
+  margin: 10px 0;
+}
+
+.sailing-player-total {
+  margin: 6px 0 4px;
+  font-weight: bold;
+}
+
+.sailing-progress-track {
+  box-sizing: border-box;
+  width: 100%;
+  height: 16px;
+  padding: 2px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080;
+}
+
+.sailing-progress-track > span {
+  display: block;
+  height: 100%;
+  background-color: #008080;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 8px,
+    rgba(255, 255, 255, 0.45) 8px,
+    rgba(255, 255, 255, 0.45) 9px
+  );
+}
+
+.sailing-metadata-warning {
+  display: block;
+  margin-top: 5px;
+  color: #7a3200;
+}
+
+.sailing-data-note {
+  margin: 10px 0;
+  padding: 7px;
+  border: 1px solid #808080;
+  background: #ffffe1;
+}
+
+.sailing-explorer-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sailing-explorer-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-weight: bold;
+}
+
+.sailing-explorer-controls select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.sailing-explorer-results {
+  margin-top: 10px;
+}
+
+.sailing-chart-group {
+  margin: 10px 0;
+  padding: 8px;
+  background: #c0c0c0;
+  box-shadow: inset -1px -1px #808080, inset 1px 1px #ffffff;
+}
+
+.sailing-chart-group-title {
+  flex: 1;
+  font-size: 16px;
+}
+
+.sailing-chart-group-heading {
+  min-height: 36px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.sailing-chart-group-heading::before {
+  content: "\25B6";
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.sailing-chart-group[open] > .sailing-chart-group-heading::before {
+  content: "\25BC";
+}
+
+.sailing-chart-group-body {
+  margin-top: 6px;
+}
+
+.sailing-sea-group {
+  margin-top: 8px;
+  background: #ffffff;
+  box-shadow: inset -1px -1px #ffffff, inset 1px 1px #808080;
+}
+
+.sailing-sea-group > summary {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
+  cursor: pointer;
+  background: #c0c0c0;
+  font-weight: bold;
+  list-style: none;
+}
+
+.sailing-chart-group-heading::-webkit-details-marker,
+.sailing-sea-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sailing-sea-group > summary::before {
+  content: "\25B6";
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.sailing-sea-group[open] > summary::before {
+  content: "\25BC";
+}
+
+.sailing-sea-body {
+  min-width: 0;
+  padding: 8px;
+}
+
+.sailing-task-list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sailing-task {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 6px;
+  padding: 7px 4px;
+  border-top: 1px solid #dfdfdf;
+}
+
+.sailing-task-state {
+  font-weight: bold;
+  text-align: center;
+}
+
+.sailing-task.is-complete .sailing-task-state {
+  color: #006600;
+}
+
+.sailing-task-copy {
+  display: block;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
 }
 
 /* Handheld desktop: retain the Windows 98 language while making every window
@@ -687,6 +949,45 @@ a:focus-visible {
 
   .window-actions button + button {
     margin-left: 0 !important;
+  }
+
+  .overview-grid,
+  .sailing-player-grid,
+  .sailing-explorer-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-card-header {
+    align-items: flex-start;
+  }
+
+  .sailing-intro {
+    grid-template-columns: 1fr;
+  }
+
+  .sailing-intro a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .sailing-explorer-controls select,
+  .sailing-chart-group > summary,
+  .sailing-sea-group > summary {
+    min-height: 44px;
+    font-size: 16px;
+    touch-action: manipulation;
+  }
+
+  .sailing-sea-body > a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .sailing-task {
+    padding: 10px 4px;
   }
 
   .chart-toolbar button,

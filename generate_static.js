@@ -195,6 +195,114 @@ function getLevelComparisonData(playerDataMap) {
   };
 }
 
+function getOverallExperience(data) {
+  const overall = data.skills?.find(skill => skill?.name === 'Overall');
+  return Number.isFinite(overall?.xp) ? overall.xp : null;
+}
+
+export function getPlayerOverviewData(playerDataMap, gameData) {
+  const knownQuestNames = gameData.knownQuestNames || new Set();
+  const totalQuests = knownQuestNames.size;
+  const totalCombatAchievements = Object.keys(gameData.combatAchievements || {}).length;
+  const totalSeaChartingTasks = gameData.seaChartingTasks?.length || 0;
+  const players = {};
+
+  for (const [player, playerInfo] of Object.entries(playerDataMap)) {
+    const data = playerInfo.latestData;
+    const normalizedQuests = normalizeQuestStatuses(data.quests);
+    const completedQuests = Object.entries(normalizedQuests).filter(([questName, status]) =>
+      status === 2 && (knownQuestNames.size === 0 || knownQuestNames.has(questName))
+    ).length;
+    const levels = Object.values(data.levels || {}).filter(Number.isFinite);
+    const seaCharting = Array.isArray(data.sea_charting)
+      ? new Set(data.sea_charting.filter(Number.isInteger)).size
+      : null;
+
+    players[player] = {
+      snapshotAt: parseSnapshotTimestamp(playerInfo.latestFile).toISOString(),
+      totalLevel: levels.reduce((sum, level) => sum + level, 0),
+      totalExperience: getOverallExperience(data),
+      completedQuests,
+      sailingLevel: Number.isFinite(data.levels?.Sailing) ? data.levels.Sailing : null,
+      seaCharting,
+      collectionLog: getCollectionLogTotal(data),
+      combatAchievements: new Set((data.combat_achievements || []).filter(Number.isInteger)).size
+    };
+  }
+
+  return {
+    players: Object.keys(players).sort(),
+    playerStats: players,
+    totals: {
+      quests: totalQuests,
+      combatAchievements: totalCombatAchievements,
+      seaCharting: totalSeaChartingTasks
+    }
+  };
+}
+
+function groupSeaChartingTasks(tasks, key) {
+  const groups = new Map();
+  for (const task of tasks) {
+    const name = task[key];
+    if (!groups.has(name)) {
+      groups.set(name, {
+        name,
+        taskIds: []
+      });
+    }
+    groups.get(name).taskIds.push(task.taskId);
+  }
+
+  return [...groups.values()]
+    .map(group => ({ ...group, taskIds: group.taskIds.sort((a, b) => a - b) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function getSailingProgressData(playerDataMap, seaChartingTasks) {
+  const tasks = Array.isArray(seaChartingTasks) ? seaChartingTasks : [];
+  const knownTaskIds = new Set(tasks.map(task => task.taskId));
+  const playerProgress = {};
+
+  for (const [player, playerInfo] of Object.entries(playerDataMap)) {
+    const data = playerInfo.latestData;
+    const hasSeaCharting = Array.isArray(data.sea_charting);
+    const completedTaskIds = hasSeaCharting
+      ? [...new Set(data.sea_charting.filter(Number.isInteger))].sort((a, b) => a - b)
+      : [];
+    const knownCompletedTaskIds = completedTaskIds.filter(taskId => knownTaskIds.has(taskId));
+
+    playerProgress[player] = {
+      available: hasSeaCharting,
+      sailingLevel: Number.isFinite(data.levels?.Sailing) ? data.levels.Sailing : null,
+      completedTaskIds: knownCompletedTaskIds,
+      unknownTaskIds: completedTaskIds.filter(taskId => !knownTaskIds.has(taskId)),
+      snapshotAt: parseSnapshotTimestamp(playerInfo.latestFile).toISOString()
+    };
+  }
+
+  return {
+    sourceUrl: 'https://oldschool.runescape.wiki/w/Sea_charting',
+    totalTasks: tasks.length,
+    players: Object.keys(playerProgress).sort(),
+    playerProgress,
+    completionGroups: groupSeaChartingTasks(tasks, 'completionGroup'),
+    tasks: tasks.map(task => ({
+      taskId: task.taskId,
+      level: task.level,
+      type: task.type,
+      task: task.task,
+      sea: task.sea,
+      seaWikiLink: task.seaWikiLink,
+      ocean: task.ocean,
+      oceanWikiLink: task.oceanWikiLink,
+      completionGroup: task.completionGroup,
+      isBonusChart: task.isBonusChart,
+      hazard: task.hazard
+    }))
+  };
+}
+
 function getAchievementDiaryComparisonData(playerDataMap) {
   const latestPlayerData = {};
   const allAchievements = new Set();
@@ -882,6 +990,9 @@ function generatePlayerSelectionUI(players) {
 
 function generateWindowVisibilityUI() {
   const windows = [
+    { id: 'player-overview', name: 'Player Overview', enabled: true, introducedVersion: 2 },
+    { id: 'sailing-progress', name: 'Sailing Progress', enabled: true, introducedVersion: 2 },
+    { id: 'sea-charting-explorer', name: 'Sea Charting Explorer', enabled: true, introducedVersion: 2 },
     { id: 'quest-progress', name: 'Quest Progress', enabled: true },
     { id: 'total-level-progress', name: 'Total Level Progress', enabled: true },
     { id: 'total-exp-progress', name: 'Total XP Progress', enabled: true },
@@ -903,7 +1014,7 @@ function generateWindowVisibilityUI() {
   for (const window of windows) {
     visibilityHtml += `
       <div class="window-option">
-        <input type="checkbox" id="window-${window.id}" value="${window.id}" ${window.enabled ? 'checked' : ''} onchange="updateWindowVisibility()">
+        <input type="checkbox" id="window-${window.id}" value="${window.id}" data-introduced-version="${window.introducedVersion || 1}" ${window.enabled ? 'checked' : ''} onchange="updateWindowVisibility()">
         <label class="window-label" for="window-${window.id}">
           <span class="window-name">${window.name}</span>
         </label>
@@ -1000,6 +1111,8 @@ export async function generateStaticHTML() {
     const musicTracksComparisonData = getMusicTracksComparisonData(playerDataMap, gameData.musicTracks);
     const collectionLogComparisonData = getCollectionLogComparisonData(playerDataMap, gameData.collectionLog);
     const activitiesComparisonData = getActivitiesComparisonData(playerDataMap);
+    const playerOverviewData = getPlayerOverviewData(playerDataMap, gameData);
+    const sailingProgressData = getSailingProgressData(playerDataMap, gameData.seaChartingTasks);
 
     console.log(`Comparison data generated in ${Date.now() - startCompare}ms`);
 
@@ -1090,6 +1203,8 @@ export async function generateStaticHTML() {
       musicTracksMetadata: gameData.musicTracks || {},
       collectionLog: collectionLogComparisonData,
       activities: activitiesComparisonData,
+      playerOverview: playerOverviewData,
+      sailing: sailingProgressData,
       achievements: serializedAchievements
     }));
 
@@ -1106,7 +1221,7 @@ export async function generateStaticHTML() {
   <!-- 100% privacy-first analytics -->
   <script data-collect-dnt="true" async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
 </head>
-<body class="loading" data-version="${dataVersion}" style="background-color: #008080;">
+<body class="loading" data-version="${dataVersion}" data-window-catalog-version="2" style="background-color: #008080;">
   <noscript><img src="https://queue.simpleanalyticscdn.com/noscript.gif?collect-dnt=true" alt="" referrerpolicy="no-referrer-when-downgrade"/></noscript>
   <!-- Loading screen -->
   <div class="loading-screen" id="loadingScreen">
@@ -1129,6 +1244,42 @@ export async function generateStaticHTML() {
       <div class="window-body">
         ${playerSelectionHtml}
         ${windowVisibilityHtml}
+      </div>
+    </div>
+    <div class="window main-window" data-window-id="player-overview" data-introduced-version="2">
+      <div class="title-bar">
+        <div class="title-bar-text">Player Overview</div>
+        <div class="title-bar-controls">
+          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
+          <button aria-label="Close" onclick="closeWindow(this)"></button>
+        </div>
+      </div>
+      <div class="window-body">
+        <div id="player-overview-container"></div>
+      </div>
+    </div>
+    <div class="window main-window" data-window-id="sailing-progress" data-introduced-version="2">
+      <div class="title-bar">
+        <div class="title-bar-text">Sailing Progress</div>
+        <div class="title-bar-controls">
+          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
+          <button aria-label="Close" onclick="closeWindow(this)"></button>
+        </div>
+      </div>
+      <div class="window-body">
+        <div id="sailing-progress-container"></div>
+      </div>
+    </div>
+    <div class="window main-window" data-window-id="sea-charting-explorer" data-introduced-version="2">
+      <div class="title-bar">
+        <div class="title-bar-text">Sea Charting Explorer</div>
+        <div class="title-bar-controls">
+          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
+          <button aria-label="Close" onclick="closeWindow(this)"></button>
+        </div>
+      </div>
+      <div class="window-body">
+        <div id="sea-charting-explorer-container"></div>
       </div>
     </div>
     <div class="window main-window" data-window-id="quest-progress">

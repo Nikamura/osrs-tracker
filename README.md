@@ -16,7 +16,7 @@ A comprehensive tool to track Old School RuneScape (OSRS) progress for a group o
   - Music track unlocks
   - Combat achievements
   - Collection log progress
-  - Sailing levels and sea-charting task totals
+  - Sailing levels and WikiSync sea-charting task IDs
 - **Data Storage**: Stores timestamped JSON files for historical tracking
 - **Data Cleanup**: Removes consecutive per-player snapshots when only timestamps or hiscore ranks changed, while preserving actual progress
 - **Daily Aggregation for Charts**: Time-series graphs (Quests, Total Level, Skill Level, Total XP) now keep only the latest sample per player per day (Europe/Vilnius). This reduces visual noise while preserving daily progress. Tables remain unaggregated.
@@ -31,6 +31,9 @@ A comprehensive tool to track Old School RuneScape (OSRS) progress for a group o
 - **Window Controls**: Each window (except Configuration) features:
   - Minimize button to collapse/expand the window content
   - Close button to hide the window (can be reopened via Configuration panel)
+- **Player Overview**: Compact per-player cards for total level, total XP, quests, collection log, combat achievements, Sailing level, and snapshot time
+- **Sailing Progress**: Lightweight per-player Sailing and Captain's log progress bars
+- **Sea Charting Explorer**: A separate, independently closable window for detailed chart tasks, seas, oceans, and filters
 - **Progress Charts**: Line charts showing progression over time:
   - Quest completion progress
   - Total level progression
@@ -57,6 +60,7 @@ osrs-quest-tracker/
 ├── data_fetcher.js         # Fetches player data from RuneLite API
 ├── fetch_collection_log.js # Fetches collection log data from OSRS Wiki
 ├── fetch_combat_achievements.js # Fetches combat achievements data from OSRS Wiki
+├── fetch_sea_charting.js # Fetches and validates sea-charting task metadata
 ├── generate_static.js      # Generates static HTML with all data and features
 ├── server.js               # Express server to serve the web interface
 ├── cleanup_player_data.js  # Removes duplicate consecutive data files
@@ -167,6 +171,7 @@ npm run cleanup:dry-run
 - `npm test` - Run the regression suite
 - `npm run fetch-combat-achievements` - Fetch latest combat achievements data from the OSRS Wiki
 - `npm run fetch-collection-log` - Fetch latest collection log data from the OSRS Wiki
+- `npm run fetch-sea-charting` - Fetch and validate sea-charting task metadata from the OSRS Wiki
 - `npm run fetch-music-tracks` - Fetch latest music tracks metadata from the OSRS Wiki
 - `npm run fetch-quests` - Fetch latest quests and miniquests from the OSRS Wiki into a unified list
 
@@ -202,6 +207,28 @@ The collection log comparison table displays all items that players have obtaine
 - **Completion Percentages**: Real-time calculation of what percentage of selected players have each item
 - **Responsive Filtering**: Dynamically updates when players are selected/deselected
 
+## Player Overview and Sailing
+
+### Player Overview
+
+The Player Overview window provides a quick status card for every selected player. Each card shows the latest snapshot time together with total level, total XP, completed quests, collection log total, completed combat achievements, and Sailing level. The cards follow the global player selection instead of adding another independent filter.
+
+### Sailing Progress and Sea Charting Explorer
+
+Sailing is split into two independently closable windows so the detailed data does not have to remain open beside the quick comparison:
+
+- **Sailing Progress**: Shows each selected player's Sailing level, completed chart count, total known charts, and an accessible progress bar
+- **Sea Charting Explorer**: Switches player, chart area, and status (`Missing`, `Completed`, or `All`); groups tasks into collapsible completion-area and sea summaries; and shows required Sailing level, chart type, bonus-chart status, hazard, task description, and relevant OSRS Wiki sea link
+- **Metadata Drift Handling**: Sailing Progress reports newer WikiSync task IDs that are not present in the current metadata instead of silently treating them as known charts
+
+On mobile, overview and Sailing summaries use cards rather than wide comparison tables. Explorer controls stack vertically, and completion areas and seas use nested native `details`/`summary` accordions so the task list remains scannable without a 358-row page.
+
+### Sea-Charting Metadata Pipeline
+
+`npm run fetch-sea-charting` queries the OSRS Wiki's structured `seachart` data, normalizes the task ID, description, required level, type, sea, ocean, locations, and hazard, then writes `game_data/sea_charting.json`. The fetch validates unique non-negative IDs, complete task metadata, valid Sailing levels, and a minimum of 358 tasks before replacing the previous file atomically. An unexpected item-count decrease is rejected unless it has been explicitly reviewed.
+
+The script is included in `npm run fetch-game-data`, so Docker startup and the daily metadata refresh keep sea-charting metadata on the same lifecycle as quests, music tracks, combat achievements, and collection log data.
+
 ## Data Sources
 
 - **Primary API**: [RuneLite Player Data API](https://sync.runescape.wiki/runelite/player/{username}/STANDARD)
@@ -209,6 +236,7 @@ The collection log comparison table displays all items that players have obtaine
 - **Item Icons**: [OSRS Wiki](https://oldschool.runescape.wiki/)
 - **Music Tracks**: [OSRS Wiki Music page](https://oldschool.runescape.wiki/w/Music)
 - **Quests**: [OSRS Wiki Quests/List](https://oldschool.runescape.wiki/w/Quests/List)
+- **Sea-charting metadata**: [OSRS Wiki Sea charting page](https://oldschool.runescape.wiki/w/Sea_charting) and its structured `seachart` data
 - **Data Types Collected**:
   - Quests (not started: 0, in progress: 1, completed: 2)
   - Skill levels (1-99+)
@@ -216,9 +244,9 @@ The collection log comparison table displays all items that players have obtaine
   - Music tracks (unlocked/locked boolean)
   - Combat achievements (task IDs array with detailed achievement metadata)
   - Collection log items (item IDs array with detailed item information)
-  - Sea-charting task IDs and totals
+  - Sea-charting task IDs and derived totals
 
-WikiSync's response timestamp is the tracker request/detection time, not proof of the player's last RuneLite upload. The standard profile does not provide historical League-profile tracking.
+WikiSync's response timestamp is the tracker request/detection time, not proof of the player's last RuneLite upload. A `sea_charting` ID means that the corresponding Captain's log task was completed in the player's latest WikiSync snapshot; it does **not** prove that the player visited, docked at, or unlocked an island. Individual chart descriptions, seas, oceans, and requirements come from OSRS Wiki metadata and may briefly lag behind newly released WikiSync IDs. The standard profile does not provide historical League-profile tracking.
 
 ## Player Configuration
 
@@ -241,14 +269,15 @@ Display names and player colors are mapped in `config.js`.
 - **Styling**: 98.css for retro Windows 98 aesthetic + custom CSS in `public/styles.css`
 - **Data Format**: JSON files with ISO timestamp naming convention
 - **State Management**: localStorage for UI preferences and window states
-- **Responsive Design**: Flexible window layout with drag-and-drop functionality
+- **Responsive Design**: Flexible desktop windows plus mobile-first cards, stacked controls, and collapsible sea-charting accordions
 - **CSS Architecture**: Separated inline styles into external CSS file for better maintainability
 
 ## Changelog
 
 ### Latest Changes
 - **August 2026 maintenance**: Updated live Wiki parsers for wrapped quest headings and the current music-table schema; added validation, honest request identification, retries/timeouts, atomic writes, and failure propagation.
-- **Sailing-era support**: Tracks Sailing dynamically and exposes WikiSync sea-charting totals and recent progress.
+- **Player Overview**: Added a compact, filter-aware card view of each player's headline progress and latest snapshot time.
+- **Sailing-era support**: Added Sailing progress cards, the Sea Charting Explorer, and a validated OSRS Wiki metadata pipeline while keeping WikiSync completion limits explicit.
 - **Correct collection totals**: Uses the official `Collections Logged` hiscore instead of WikiSync's unreliable raw varp count, and normalizes Prospector recolour IDs.
 - **Safer operations**: Added per-player progress deduplication, cache-version enforcement, bounded first-run chart processing, Docker bootstrap/daily metadata refresh, a health endpoint, CSP, escaped upstream content, dependency updates, and regression tests.
 - Quest comparison table: added sticky totals row and clickable quest names linking to the OSRS Wiki using metadata from `game_data/quests.json`.

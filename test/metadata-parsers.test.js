@@ -5,6 +5,7 @@ import { parseCombatAchievements } from '../fetch_combat_achievements.js';
 import { parseCollectionLog } from '../fetch_collection_log.js';
 import { parseMusicTracks } from '../fetch_music_tracks.js';
 import { parseQuests } from '../fetch_quests.js';
+import { normalizeSeaChartingTasks } from '../fetch_sea_charting.js';
 
 function documentFrom(html) {
   return new JSDOM(html).window.document;
@@ -101,4 +102,85 @@ test('collection parser uses stable IDs and semantic table class', () => {
   assert.equal(items[0].itemId, '34027');
   assert.equal(items[0].itemName, 'Angel item');
   assert.equal(items[0].collection, 'Mad Angel');
+});
+
+test('sea charting normalizer maps Wiki bucket rows to stable completion metadata', () => {
+  const tasks = normalizeSeaChartingTasks({
+    bucket: [
+      {
+        id: 0,
+        description: 'Find a [[Crashed glider (Sea charting)|crashed glider]] south of the [[Karamja]] Shipyard.',
+        level: 1,
+        type: 'Generic',
+        sea: 'Bay of Sarim',
+        ocean: 'Ardent Ocean',
+        location: '2987,3010',
+      },
+      {
+        id: 2,
+        description: "Use your [[spyglass]] to get a good view of the [[Wizards' Tower]] from the north.",
+        level: 1,
+        type: 'Spyglass',
+        sea: 'Bay of Sarim',
+        ocean: 'Bonus charts',
+        location: '3104,3181'
+      },
+      {
+        id: 300,
+        description: 'Help the meteorologist document a small island<sup class="noprint">&#91;<span title="verbatim">sic</span>&#93;</sup> and a [[storm]].',
+        level: 57,
+        type: 'Weather',
+        sea: 'Bay of Sarim',
+        ocean: 'Bonus charts',
+        location: '3000,3200',
+        location2: '3001,3201',
+        hazard: 'Stormy seas'
+      }
+    ]
+  });
+
+  assert.equal(tasks.length, 3);
+  assert.deepEqual(
+    {
+      taskId: tasks[0].taskId,
+      task: tasks[0].task,
+      location: tasks[0].location,
+      seaWikiLink: tasks[0].seaWikiLink,
+      oceanWikiLink: tasks[0].oceanWikiLink,
+      completionGroup: tasks[0].completionGroup
+    },
+    {
+      taskId: 0,
+      task: 'Find a crashed glider south of the Karamja Shipyard.',
+      location: [2987, 3010],
+      seaWikiLink: 'https://oldschool.runescape.wiki/w/Bay_of_Sarim',
+      oceanWikiLink: 'https://oldschool.runescape.wiki/w/Ardent_Ocean',
+      completionGroup: 'Ardent Ocean'
+    }
+  );
+
+  // Task 2 is marked as a bonus chart upstream, but belongs to Ardent Ocean
+  // completion. Other bonus-chart tasks form the Miscellaneous group.
+  assert.equal(tasks[1].ocean, 'Ardent Ocean');
+  assert.equal(tasks[1].completionGroup, 'Ardent Ocean');
+  assert.equal(tasks[1].isBonusChart, true);
+  assert.equal(tasks[2].completionGroup, 'Miscellaneous');
+  assert.equal(tasks[2].isBonusChart, true);
+  assert.equal(tasks[2].task, 'Help the meteorologist document a small island[sic] and a storm.');
+  assert.deepEqual(tasks[2].secondaryLocation, [3001, 3201]);
+  assert.equal(tasks[2].hazard, 'Stormy seas');
+});
+
+test('sea charting normalizer rejects malformed and duplicate task data', () => {
+  assert.throws(
+    () => normalizeSeaChartingTasks({ missing: [] }),
+    /no bucket rows/
+  );
+  assert.throws(
+    () => normalizeSeaChartingTasks([
+      { id: 1, description: 'First', level: 1, type: 'Generic', sea: 'Test Sea', ocean: 'Test Ocean' },
+      { id: 1, description: 'Second', level: 1, type: 'Generic', sea: 'Test Sea', ocean: 'Test Ocean' }
+    ]),
+    /duplicate task IDs/
+  );
 });

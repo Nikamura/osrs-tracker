@@ -5,7 +5,7 @@ cd /app
 mkdir -p player_data game_data cache public/data
 
 metadata_ready=true
-for filename in quests.json combat_achievements.json collection_log.json music_tracks.json; do
+for filename in quests.json combat_achievements.json collection_log.json sea_charting.json music_tracks.json; do
   if [ ! -s "game_data/$filename" ]; then
     metadata_ready=false
   fi

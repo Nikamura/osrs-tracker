@@ -199,6 +199,8 @@ function readGameDataArray(filename, minimumItems) {
 /**
  * Load game metadata (quests, combat achievements, collection log, music tracks)
  */
+// Load the generated Wiki metadata needed by every comparison window, including
+// the task details used to join WikiSync sea-charting IDs to human-readable data.
 export function loadGameData() {
   const gameData = {
     quests: null,
@@ -207,7 +209,8 @@ export function loadGameData() {
     questCapeRequiredNames: null,
     combatAchievements: {},
     collectionLog: {},
-    musicTracks: {}
+    musicTracks: {},
+    seaChartingTasks: []
   };
 
   try {
@@ -234,6 +237,8 @@ export function loadGameData() {
     tracks.forEach(track => {
       gameData.musicTracks[track.name] = track;
     });
+
+    gameData.seaChartingTasks = readGameDataArray("sea_charting.json", 358);
   } catch (error) {
     throw new Error(`Game metadata is missing or invalid. Run \"npm run fetch-game-data\" first. ${error.message}`, {
       cause: error

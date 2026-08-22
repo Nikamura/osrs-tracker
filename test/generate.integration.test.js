@@ -9,12 +9,110 @@ import {
 } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { generateStaticHTML } from '../generate_static.js';
+import { JSDOM } from 'jsdom';
+import {
+  generateStaticHTML,
+  getPlayerOverviewData,
+  getSailingProgressData
+} from '../generate_static.js';
 
 function writeJson(filePath, data) {
   mkdirSync(path.dirname(filePath), { recursive: true });
   writeFileSync(filePath, JSON.stringify(data));
 }
+
+function seaChartingTasks(count = 358) {
+  return Array.from({ length: count }, (_, taskId) => {
+    const isArdent = taskId < 3;
+    const ocean = isArdent ? 'Ardent Ocean' : 'Northern Ocean';
+    const sea = isArdent ? 'Bay of Sarim' : 'Test Northern Sea';
+    return {
+      taskId,
+      level: isArdent ? 1 : 78,
+      type: taskId === 2 ? 'Spyglass' : 'Generic',
+      task: `Charting task ${taskId}`,
+      sea,
+      seaWikiLink: `https://oldschool.runescape.wiki/w/${sea.replaceAll(' ', '_')}`,
+      ocean,
+      oceanWikiLink: `https://oldschool.runescape.wiki/w/${ocean.replaceAll(' ', '_')}`,
+      completionGroup: ocean,
+      isBonusChart: taskId === 2,
+      location: [3000 + taskId, 3200],
+      secondaryLocation: null,
+      hazard: null
+    };
+  });
+}
+
+test('player overview and Sailing progress distinguish known, unknown, and unavailable data', () => {
+  const tasks = seaChartingTasks(4);
+  const playerDataMap = {
+    alpha: {
+      latestFile: 'alpha_2026-08-22T10:15:00.000Z.json',
+      latestData: {
+        quests: { 'Quest 0': 2, 'Fallen From Grace': 1, 'Unknown Quest': 2 },
+        levels: { Sailing: 62, Attack: 70 },
+        skills: [{ name: 'Overall', xp: 1_234_567 }],
+        activities: [{ name: 'Collections Logged', score: 9 }],
+        collection_log: [10, 11],
+        combat_achievements: [5, 5, 6],
+        sea_charting: [3, 1, 1, 999]
+      }
+    },
+    beta: {
+      latestFile: 'beta_2026-08-22T10:00:00.000Z.json',
+      latestData: {
+        quests: { 'Quest 0': 0 },
+        levels: { Sailing: 1 },
+        skills: [{ name: 'Overall', xp: 0 }],
+        activities: [],
+        collection_log: [],
+        combat_achievements: []
+      }
+    }
+  };
+  const gameData = {
+    knownQuestNames: new Set(['Quest 0', 'Fallen From Grace']),
+    combatAchievements: { 5: {}, 6: {}, 7: {} },
+    seaChartingTasks: tasks
+  };
+
+  const overview = getPlayerOverviewData(playerDataMap, gameData);
+  assert.deepEqual(overview.players, ['alpha', 'beta']);
+  assert.deepEqual(overview.totals, {
+    quests: 2,
+    combatAchievements: 3,
+    seaCharting: 4
+  });
+  assert.deepEqual(overview.playerStats.alpha, {
+    snapshotAt: '2026-08-22T10:15:00.000Z',
+    totalLevel: 132,
+    totalExperience: 1_234_567,
+    completedQuests: 1,
+    sailingLevel: 62,
+    seaCharting: 3,
+    collectionLog: 9,
+    combatAchievements: 2
+  });
+  assert.equal(overview.playerStats.beta.seaCharting, null);
+
+  const sailing = getSailingProgressData(playerDataMap, tasks);
+  assert.equal(sailing.totalTasks, 4);
+  assert.deepEqual(sailing.players, ['alpha', 'beta']);
+  assert.deepEqual(sailing.playerProgress.alpha.completedTaskIds, [1, 3]);
+  assert.deepEqual(sailing.playerProgress.alpha.unknownTaskIds, [999]);
+  assert.equal(sailing.playerProgress.alpha.available, true);
+  assert.equal(sailing.playerProgress.beta.available, false);
+  assert.deepEqual(
+    sailing.completionGroups.map(group => ({ name: group.name, taskIds: group.taskIds })),
+    [
+      { name: 'Ardent Ocean', taskIds: [0, 1, 2] },
+      { name: 'Northern Ocean', taskIds: [3] }
+    ]
+  );
+  assert.equal(sailing.tasks.length, 4);
+  assert.equal(sailing.tasks[2].isBonusChart, true);
+});
 
 test('fresh generation works and includes Sailing-era progress', async () => {
   const previousDirectory = process.cwd();
@@ -40,6 +138,7 @@ test('fresh generation works and includes Sailing-era progress', async () => {
     writeJson('game_data/combat_achievements.json', combatAchievements);
     writeJson('game_data/collection_log.json', collectionLog);
     writeJson('game_data/music_tracks.json', musicTracks);
+    writeJson('game_data/sea_charting.json', seaChartingTasks());
 
     // A metadata-only fresh deploy should render an explicit empty dashboard, not fail on player_data.
     await generateStaticHTML();
@@ -48,6 +147,21 @@ test('fresh generation works and includes Sailing-era progress', async () => {
     assert.match(emptyDashboardHtml, /viewport-fit=cover/);
     assert.match(emptyDashboardHtml, /configuration-window/);
     assert.match(emptyDashboardHtml, /chart-frame/);
+
+    const emptyDashboardDocument = new JSDOM(emptyDashboardHtml).window.document;
+    assert.equal(emptyDashboardDocument.body.dataset.windowCatalogVersion, '2');
+    for (const windowId of ['player-overview', 'sailing-progress', 'sea-charting-explorer']) {
+      const checkbox = emptyDashboardDocument.querySelector(`#window-${windowId}`);
+      const windowElement = emptyDashboardDocument.querySelector(`[data-window-id="${windowId}"]`);
+      assert.ok(checkbox, `${windowId} visibility control should exist`);
+      assert.equal(checkbox.dataset.introducedVersion, '2');
+      assert.equal(checkbox.checked, true);
+      assert.ok(windowElement, `${windowId} window should exist`);
+      assert.equal(windowElement.dataset.introducedVersion, '2');
+    }
+    assert.ok(emptyDashboardDocument.querySelector('#player-overview-container'));
+    assert.ok(emptyDashboardDocument.querySelector('#sailing-progress-container'));
+    assert.ok(emptyDashboardDocument.querySelector('#sea-charting-explorer-container'));
 
     const timestamp = '2026-08-22T10:00:00.000Z';
     const injectedSkillName = '"><img src=x onerror=alert(1)>';
@@ -81,6 +195,18 @@ test('fresh generation works and includes Sailing-era progress', async () => {
 
     const progressedTableData = JSON.parse(readFileSync('public/data/table-data.json', 'utf8'));
     assert.equal(progressedTableData.activities.playerActivities.tester['Sea charting tasks'], 3);
+    assert.equal(progressedTableData.playerOverview.totals.seaCharting, 358);
+    assert.equal(progressedTableData.playerOverview.playerStats.tester.sailingLevel, 42);
+    assert.equal(progressedTableData.playerOverview.playerStats.tester.seaCharting, 3);
+    assert.equal(progressedTableData.sailing.totalTasks, 358);
+    assert.deepEqual(progressedTableData.sailing.playerProgress.tester.completedTaskIds, [1, 2, 3]);
+    assert.deepEqual(progressedTableData.sailing.playerProgress.tester.unknownTaskIds, []);
+    assert.equal(progressedTableData.sailing.playerProgress.tester.snapshotAt, progressedTimestamp);
+    assert.equal(progressedTableData.sailing.tasks.length, 358);
+    assert.deepEqual(
+      progressedTableData.sailing.completionGroups.find(group => group.name === 'Ardent Ocean').taskIds,
+      [0, 1, 2]
+    );
     assert.equal(progressedTableData.achievements.filter(item => item.name === 'Quest 0').length, 1);
     assert.equal(progressedTableData.achievements.filter(item => item.type === 'sea_charting').length, 0);
     assert.equal(progressedTableData.achievements.filter(item => item.name.includes('Mad Angel')).length, 0);

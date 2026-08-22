@@ -54,8 +54,13 @@ body.loading .generated-at {
 }
 
 /* Quest comparison table styles */
-tbody tr:not(.all-completed):not(.not-started-by-any):not(.completed-by-one):nth-child(even) {
+tbody tr {
+  --mobile-sticky-background: #ffffff;
+}
+
+tbody :where(tr:not(.all-completed):not(.not-started-by-any):not(.completed-by-one):nth-child(even)) {
   background-color: #ececec;
+  --mobile-sticky-background: #ececec;
 }
 
 .status-in-progress {
@@ -68,6 +73,7 @@ tbody tr:not(.all-completed):not(.not-started-by-any):not(.completed-by-one):nth
 
 tr.all-completed {
   background-color: #3a8e3a;
+  --mobile-sticky-background: #3a8e3a;
   color: white;
   font-weight: bold;
 }
@@ -82,22 +88,99 @@ tr.all-completed td {
 
 tr.not-started-by-any {
   background-color: #cccccc;
+  --mobile-sticky-background: #cccccc;
 }
 
 tr.completed-by-one {
   background-color: #a6d8f0;
+  --mobile-sticky-background: #a6d8f0;
 }
 
 /* Layout styles */
+html {
+  background: #008080;
+}
+
+body {
+  min-width: 0;
+}
+
 .container {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  width: 100%;
 }
 
 .main-window {
   margin: 32px;
   width: 800px;
+  max-width: calc(100vw - 80px);
+}
+
+.player-selection {
+  margin-bottom: 20px;
+}
+
+.window-visibility {
+  margin-bottom: 15px;
+}
+
+.player-options,
+.window-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 10px;
+}
+
+.player-option,
+.window-option {
+  display: flex;
+  min-width: 0;
+}
+
+.player-label,
+.window-label,
+.time-period-control {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.player-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.time-period-control {
+  margin-left: 10px;
+}
+
+.window-actions {
+  margin-top: 10px;
+}
+
+.chart-frame {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  height: 360px;
+  max-height: 600px;
+}
+
+.chart-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.skill-control {
+  margin-bottom: 15px;
 }
 
 /* Level comparison styles */
@@ -186,30 +269,46 @@ tr.completed-by-one {
   z-index: 5;
 }
 
+.sticky-total-row {
+  --mobile-sticky-background: #f0f0f0;
+}
+
 /* Achievement diary styles */
 .diary-complete {
   background-color: #3a8e3a;
+  --mobile-sticky-background: #3a8e3a;
   color: white;
   font-weight: bold;
 }
 
 .diary-partial {
   background-color: #ffcc00;
+  --mobile-sticky-background: #ffcc00;
 }
 
 .diary-not-started {
   background-color: #cccccc;
+  --mobile-sticky-background: #cccccc;
 }
 
 /* Music track styles */
 .music-track-unlocked {
   background-color: #3a8e3a;
+  --mobile-sticky-background: #3a8e3a;
   color: white;
   font-weight: bold;
 }
 
 .music-track-locked {
   background-color: #cccccc;
+  --mobile-sticky-background: #cccccc;
+}
+
+.music-track-unknown {
+  background-color: #eeeeee;
+  --mobile-sticky-background: #eeeeee;
+  color: #555555;
+  font-weight: bold;
 }
 
 /* Achievement styles */
@@ -328,15 +427,38 @@ tr.completed-by-one {
   display: none !important;
 }
 
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid #000080;
+  outline-offset: 2px;
+}
+
+.player-option input:focus-visible + .player-label,
+.window-option input:focus-visible + .window-label {
+  outline: 2px solid #000080;
+  outline-offset: 2px;
+}
+
+/* Keep the 98.css minimize glyph when the accessible action changes to Restore. */
+.title-bar-controls button[aria-controls] {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='6' height='2' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23000' d='M0 0h6v2H0z'/%3E%3C/svg%3E") !important;
+  background-position: 4px calc(100% - 3px) !important;
+  background-repeat: no-repeat !important;
+}
+
 /* Collection log styles */
 .collection-complete {
   background-color: #3a8e3a;
+  --mobile-sticky-background: #3a8e3a;
   color: white;
   font-weight: bold;
 }
 
 .collection-partial {
   background-color: #ffcc00;
+  --mobile-sticky-background: #ffcc00;
 }
 
 .collection-has-item {
@@ -352,6 +474,7 @@ tr.completed-by-one {
 /* Combat achievements styles */
 .combat-achievement-complete {
   background-color: #3a8e3a;
+  --mobile-sticky-background: #3a8e3a;
   color: white;
   font-weight: bold;
 }
@@ -374,3 +497,353 @@ tr.completed-by-one {
   background-color: #cccccc;
 }
 
+/* Handheld desktop: retain the Windows 98 language while making every window
+   behave like a native, edge-to-edge mobile card. */
+@media (max-width: 700px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+  }
+
+  .loading-screen {
+    box-sizing: border-box;
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-left: max(20px, env(safe-area-inset-left));
+  }
+
+  .generated-at {
+    position: static;
+    box-sizing: border-box;
+    margin: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+    border: 1px solid #ffffff;
+    border-radius: 0;
+    box-shadow: inset -1px -1px #000000, inset 1px 1px #dfdfdf;
+    text-align: center;
+  }
+
+  .container {
+    display: block;
+    box-sizing: border-box;
+    padding: 8px max(8px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .main-window {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    margin: 0 0 12px;
+  }
+
+  .window {
+    transition: none;
+  }
+
+  .window-body {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .title-bar {
+    min-height: 44px;
+    cursor: default !important;
+    touch-action: manipulation;
+  }
+
+  .title-bar-text {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .title-bar-controls {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 3px;
+  }
+
+  .title-bar-controls button {
+    min-width: 44px;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .title-bar-controls button[aria-controls] {
+    background-position: center !important;
+    background-size: 12px 4px !important;
+  }
+
+  .title-bar-controls button[aria-label="Close"] {
+    background-position: center !important;
+    background-size: 14px 13px !important;
+  }
+
+  .drop-indicator {
+    display: none !important;
+  }
+
+  .configuration-window h3 {
+    margin: 12px 0 8px;
+    font-size: 16px;
+  }
+
+  .configuration-window h3:first-child {
+    margin-top: 4px;
+  }
+
+  .player-options,
+  .window-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .player-option,
+  .window-option {
+    box-sizing: border-box;
+    align-items: center;
+    min-width: 0;
+    min-height: 44px;
+    background: #c0c0c0;
+    box-shadow: inset -1px -1px #808080, inset 1px 1px #ffffff;
+    line-height: 1.25;
+    touch-action: manipulation;
+  }
+
+  .player-label,
+  .window-label {
+    box-sizing: border-box;
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    margin-left: 0 !important;
+    padding: 7px 8px 7px 28px;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .player-option > input[type="checkbox"] + .player-label::before,
+  .window-option > input[type="checkbox"] + .window-label::before {
+    left: 8px;
+  }
+
+  .player-option > input[type="checkbox"]:checked + .player-label::after,
+  .window-option > input[type="checkbox"]:checked + .window-label::after {
+    left: 11px;
+  }
+
+  .player-name,
+  .window-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .player-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .player-actions > button,
+  .window-actions > button {
+    width: 100%;
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .time-period-control {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    min-height: 44px;
+    margin-left: 0;
+  }
+
+  .time-period-control select {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .window-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .window-actions button + button {
+    margin-left: 0 !important;
+  }
+
+  .chart-toolbar button,
+  .skill-control select {
+    min-height: 44px;
+    touch-action: manipulation;
+  }
+
+  .skill-control {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .skill-control select {
+    width: 100%;
+    margin-left: 0 !important;
+    padding: 5px;
+    font-size: 16px;
+  }
+
+  .chart-frame {
+    width: 100%;
+    height: 280px;
+    max-height: none;
+  }
+
+  .chart-frame canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .sunken-panel {
+    width: 100%;
+    max-width: 100%;
+    height: min(62svh, 460px) !important;
+    min-height: 320px;
+    overflow: auto !important;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table.interactive {
+    width: max-content !important;
+    min-width: 100%;
+    font-size: 12px;
+  }
+
+  table.interactive th,
+  table.interactive td {
+    min-width: 68px;
+    height: 36px;
+    padding: 6px 8px;
+    white-space: nowrap;
+  }
+
+  .quest-comparison-table th:first-child,
+  .quest-comparison-table td:first-child,
+  .level-comparison-table th:first-child,
+  .level-comparison-table td:first-child,
+  .achievement-diaries-table th:first-child,
+  .achievement-diaries-table td:first-child:not([colspan]),
+  .music-tracks-table th:first-child,
+  .music-tracks-table td:first-child,
+  .activities-comparison-table th:first-child,
+  .activities-comparison-table td:first-child,
+  #achievements-table-container table th:first-child,
+  #achievements-table-container table td:first-child,
+  .collection-log-table th:nth-child(2),
+  .collection-log-table td:nth-child(2),
+  .combat-achievements-table th:nth-child(3),
+  .combat-achievements-table td:nth-child(3) {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+    max-width: 170px;
+    background-color: var(--mobile-sticky-background, #ffffff);
+    box-shadow: 2px 0 #808080;
+    white-space: normal;
+  }
+
+  .quest-comparison-table thead th:first-child,
+  .level-comparison-table thead th:first-child,
+  .achievement-diaries-table thead th:first-child,
+  .music-tracks-table thead th:first-child,
+  .activities-comparison-table thead th:first-child,
+  #achievements-table-container table thead th:first-child,
+  .collection-log-table thead th:nth-child(2),
+  .combat-achievements-table thead th:nth-child(3) {
+    z-index: 12;
+    background-color: #c0c0c0;
+  }
+
+  .quest-comparison-table th:first-child,
+  .quest-comparison-table td:first-child,
+  .level-comparison-table th:first-child,
+  .level-comparison-table td:first-child,
+  .music-tracks-table th:first-child,
+  .music-tracks-table td:first-child,
+  .activities-comparison-table th:first-child,
+  .activities-comparison-table td:first-child {
+    min-width: 138px;
+  }
+
+  .collection-log-table th:nth-child(2),
+  .collection-log-table td:nth-child(2) {
+    min-width: 150px;
+  }
+
+  .combat-achievements-table th:nth-child(3),
+  .combat-achievements-table td:nth-child(3) {
+    min-width: 180px;
+  }
+
+  .achievements-controls {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+
+  .achievements-controls button {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 360px) {
+  .window-options {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-frame {
+    height: 250px;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  label,
+  select,
+  a {
+    -webkit-tap-highlight-color: rgba(0, 0, 128, 0.18);
+  }
+
+  .title-bar {
+    cursor: default;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

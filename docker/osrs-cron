@@ -1,0 +1,5 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+*/15 * * * * /usr/bin/flock -n /tmp/osrs-tracker.lock /bin/sh -c 'cd /app && /usr/local/bin/npm run cron' >> /proc/1/fd/1 2>> /proc/1/fd/2
+23 3 * * * /usr/bin/flock -n /tmp/osrs-tracker.lock /bin/sh -c 'cd /app && /usr/local/bin/npm run fetch-game-data && /usr/local/bin/npm run generate' >> /proc/1/fd/1 2>> /proc/1/fd/2

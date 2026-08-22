@@ -33,12 +33,16 @@ const TIER_ORDER = {
 };
 
 async function loadAppData() {
-  const v = window.__dataVersion || '';
+  const v = document.body.dataset.version || '';
   const [chartResponse, configResponse, tableResponse] = await Promise.all([
     fetch('data/chart-data.json?v=' + v),
     fetch('data/player-config.json?v=' + v),
     fetch('data/table-data.json?v=' + v)
   ]);
+  const failedResponse = [chartResponse, configResponse, tableResponse].find(response => !response.ok);
+  if (failedResponse) {
+    throw new Error(`Dashboard data request failed with HTTP ${failedResponse.status}`);
+  }
   const chartData = await chartResponse.json();
   const configData = await configResponse.json();
   tableData = await tableResponse.json();
@@ -70,6 +74,28 @@ function computeRankings(items, valueKey) {
 
 function getDisplayName(player) {
   return playerToDisplay[player] || player;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
+function safeWikiUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'https:' && url.hostname === 'oldschool.runescape.wiki') {
+      return escapeHtml(url.href);
+    }
+  } catch {
+    // Invalid or absent upstream URL.
+  }
+  return '#';
 }
 
 function getRankingClass(value, rank) {
@@ -231,7 +257,9 @@ function initializeAchievementsFilter() {
 
 function updateCheckboxVisualIndicators(checkboxPrefix, labelClass) {
   document.querySelectorAll(`input[type="checkbox"][id^="${checkboxPrefix}"]`).forEach(checkbox => {
-    const label = checkbox.closest(`.${labelClass}`);
+    const label = checkbox.nextElementSibling?.classList.contains(labelClass)
+      ? checkbox.nextElementSibling
+      : null;
     if (label) {
       label.classList.toggle('unselected', !checkbox.checked);
     }
@@ -812,6 +840,32 @@ function getWindowId(windowElement) {
   return titleText.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 }
 
+function updateWindowAccessibilityState(windowElement) {
+  const title = windowElement.querySelector('.title-bar-text')?.textContent.trim() || 'window';
+  const windowBody = windowElement.querySelector('.window-body');
+  const minimizeButton = windowElement.querySelector('.title-bar-controls button[onclick^="toggleWindow"]');
+  const closeButton = windowElement.querySelector('.title-bar-controls button[onclick^="closeWindow"]');
+  const isMinimized = windowElement.classList.contains('minimized');
+
+  if (windowBody && minimizeButton) {
+    const bodyId = `window-body-${getWindowId(windowElement)}`;
+    windowBody.id = bodyId;
+    minimizeButton.setAttribute('aria-controls', bodyId);
+    minimizeButton.setAttribute('aria-expanded', String(!isMinimized));
+    minimizeButton.setAttribute('aria-label', isMinimized ? 'Restore' : 'Minimize');
+    minimizeButton.setAttribute('title', isMinimized ? `Restore ${title}` : `Minimize ${title}`);
+  }
+
+  if (closeButton) {
+    closeButton.setAttribute('aria-label', 'Close');
+    closeButton.setAttribute('title', `Close ${title}`);
+  }
+}
+
+function initializeWindowAccessibility() {
+  document.querySelectorAll('.window').forEach(updateWindowAccessibilityState);
+}
+
 // Load minimized states from localStorage
 function loadMinimizedStates() {
   const savedStates = JSON.parse(localStorage.getItem('osrs-minimized-windows') || '{}');
@@ -820,6 +874,7 @@ function loadMinimizedStates() {
     if (savedStates[windowId]) {
       windowElement.classList.add('minimized');
     }
+    updateWindowAccessibilityState(windowElement);
   });
 }
 
@@ -883,6 +938,7 @@ function syncWindowStates(changedWindowId, isMinimized) {
       } else {
         windowElement.classList.remove('minimized');
       }
+      updateWindowAccessibilityState(windowElement);
     }
   });
 }
@@ -911,6 +967,7 @@ function toggleWindow(button) {
   const windowElement = button.closest('.window');
   const windowId = getWindowId(windowElement);
   const isMinimized = windowElement.classList.toggle('minimized');
+  updateWindowAccessibilityState(windowElement);
 
   // Save state and notify other windows
   saveMinimizedStates();
@@ -943,6 +1000,14 @@ function closeWindow(button) {
 
 // Initialize drag and drop functionality
 function initializeDragAndDrop() {
+  if (!window.matchMedia('(min-width: 701px) and (pointer: fine)').matches) {
+    document.querySelectorAll('.title-bar').forEach(titleBar => {
+      titleBar.draggable = false;
+      titleBar.style.cursor = 'default';
+    });
+    return;
+  }
+
   const container = document.querySelector('.container');
   let draggedElement = null;
   let dropIndicator = null;
@@ -1115,13 +1180,13 @@ function generateQuestComparisonTable(comparisonData) {
     return "<p>No player data found to compare quests.</p>";
   }
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Quest comparison" tabindex="0" style="height: 400px; overflow: auto;">';
   tableHtml += '<table class="interactive sticky-header quest-comparison-table" style="width: 100%;">';
 
   // Header
   tableHtml += '<thead><tr><th>Quest</th>';
   for (const player of players) {
-    tableHtml += `<th>${getDisplayName(player)}</th>`;
+    tableHtml += `<th>${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
@@ -1142,15 +1207,22 @@ function generateQuestComparisonTable(comparisonData) {
     tableHtml += `<tr class="${rowClass}">`;
     const meta = questMetaByName ? questMetaByName[quest] : null;
     if (meta && meta.nameWikiLink) {
-      tableHtml += `<td><a href="${meta.nameWikiLink}" target="_blank" style="text-decoration: none; color: inherit;">${quest}</a></td>`;
+      tableHtml += `<td><a href="${safeWikiUrl(meta.nameWikiLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">${escapeHtml(quest)}</a></td>`;
     } else {
-      tableHtml += `<td>${quest}</td>`;
+      tableHtml += `<td>${escapeHtml(quest)}</td>`;
     }
     for (const status of statuses) {
       let statusClass = 'status-not-started';
-      if (status === 1) statusClass = 'status-in-progress';
-      if (status === 2) statusClass = 'status-completed';
-      tableHtml += `<td class="${statusClass}"></td>`;
+      let statusLabel = 'Not started';
+      if (status === 1) {
+        statusClass = 'status-in-progress';
+        statusLabel = 'In progress';
+      }
+      if (status === 2) {
+        statusClass = 'status-completed';
+        statusLabel = 'Completed';
+      }
+      tableHtml += `<td class="${statusClass}" aria-label="${statusLabel}" title="${statusLabel}"></td>`;
     }
     tableHtml += '</tr>';
   }
@@ -1184,13 +1256,13 @@ function generateLevelComparisonTable(comparisonData) {
     return "<p>No player data found to compare levels.</p>";
   }
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Level comparison" tabindex="0" style="height: 400px; overflow: auto;">';
   tableHtml += '<table class="interactive sticky-header level-comparison-table" style="width: 100%;">';
 
   // Header
   tableHtml += '<thead><tr><th>Skill</th>';
   for (const player of players) {
-    tableHtml += `<th>${getDisplayName(player)}</th>`;
+    tableHtml += `<th>${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
@@ -1198,7 +1270,7 @@ function generateLevelComparisonTable(comparisonData) {
   tableHtml += '<tbody>';
   for (const skill of skills) {
     tableHtml += '<tr>';
-    tableHtml += `<td>${skill}</td>`;
+    tableHtml += `<td>${escapeHtml(skill)}</td>`;
 
     // Get all levels for this skill to determine rankings
     const skillLevels = players.map(player => ({
@@ -1216,7 +1288,7 @@ function generateLevelComparisonTable(comparisonData) {
 
       const rankingClass = getRankingClass(level, rankings[player]);
 
-      tableHtml += `<td class="level-cell ${levelClass}${rankingClass}" data-player="${player}" data-skill="${skill}" data-level="${level}">${level}</td>`;
+      tableHtml += `<td class="level-cell ${levelClass}${rankingClass}" data-player="${escapeHtml(player)}" data-skill="${escapeHtml(skill)}" data-level="${level}">${level}</td>`;
     }
     tableHtml += '</tr>';
   }
@@ -1259,20 +1331,20 @@ function generateAchievementDiaryComparisonTable(comparisonData) {
     return "<p>No player data found to compare achievement diaries.</p>";
   }
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Achievement diary comparison" tabindex="0" style="height: 400px; overflow: auto;">';
   tableHtml += '<table class="interactive sticky-header achievement-diaries-table" style="width: 100%;">';
 
   // Header
   tableHtml += '<thead><tr><th>Achievement Diary</th>';
   for (const player of players) {
-    tableHtml += `<th>${getDisplayName(player)}</th>`;
+    tableHtml += `<th>${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
   // Body
   tableHtml += '<tbody>';
   for (const achievement of achievements) {
-    tableHtml += `<tr><td colspan="${players.length + 1}" style="background-color: #e0e0e0; font-weight: bold; text-align: center;">${achievement}</td></tr>`;
+    tableHtml += `<tr><td colspan="${players.length + 1}" style="background-color: #e0e0e0; font-weight: bold; text-align: center;">${escapeHtml(achievement)}</td></tr>`;
 
     // Add rows for each difficulty level
     const difficulties = ['Easy', 'Medium', 'Hard', 'Elite'];
@@ -1317,7 +1389,8 @@ function generateAchievementDiaryComparisonTable(comparisonData) {
           statusClass = 'diary-not-started';
           statusText = '-';
         }
-        tableHtml += `<td class="${statusClass}" style="text-align: center;">${statusText}</td>`;
+        const statusLabel = status === true ? 'Completed' : status === false ? 'In progress' : 'Not started';
+        tableHtml += `<td class="${statusClass}" aria-label="${statusLabel}" title="${statusLabel}" style="text-align: center;">${statusText}</td>`;
       }
       tableHtml += '</tr>';
     }
@@ -1387,13 +1460,13 @@ function generateCombatAchievementsComparisonTable(comparisonData) {
     return a.name.localeCompare(b.name);
   });
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Combat achievement comparison" tabindex="0" style="height: 400px; overflow: auto;">';
   tableHtml += '<table class="interactive sticky-header combat-achievements-table" style="width: 100%;">';
 
   // Header
   tableHtml += '<thead><tr><th style="width: 50px;">Tier</th><th>Monster</th><th>Achievement</th>';
   for (const player of players) {
-    tableHtml += `<th style="width: 80px;">${getDisplayName(player)}</th>`;
+    tableHtml += `<th style="width: 80px;">${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
@@ -1420,23 +1493,24 @@ function generateCombatAchievementsComparisonTable(comparisonData) {
     tableHtml += `<tr class="${rowClass}">`;
 
     // Tier icon
-    tableHtml += `<td style="text-align: center;"><img src="${achievement.tierIconUrl}" alt="${achievement.tier}" width="24" height="24" style="image-rendering: pixelated;"></td>`;
+    tableHtml += `<td style="text-align: center;"><img src="${safeWikiUrl(achievement.tierIconUrl)}" alt="${escapeHtml(achievement.tier)}" width="24" height="24" style="image-rendering: pixelated;"></td>`;
 
     // Monster name with link (if available)
     if (achievement.monster && achievement.monster !== 'N/A' && achievement.monsterWikiLink) {
-      tableHtml += `<td><a href="${achievement.monsterWikiLink}" target="_blank" style="text-decoration: none; color: inherit;">${achievement.monster}</a></td>`;
+      tableHtml += `<td><a href="${safeWikiUrl(achievement.monsterWikiLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">${escapeHtml(achievement.monster)}</a></td>`;
     } else {
-      tableHtml += `<td style="color: #666; font-style: italic;">${achievement.monster || 'Various'}</td>`;
+      tableHtml += `<td style="color: #666; font-style: italic;">${escapeHtml(achievement.monster || 'Various')}</td>`;
     }
 
     // Achievement name with link
-    tableHtml += `<td><a href="${achievement.nameWikiLink}" target="_blank" style="text-decoration: none; color: inherit;" title="${achievement.description}">${achievement.name}</a></td>`;
+    tableHtml += `<td><a href="${safeWikiUrl(achievement.nameWikiLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;" title="${escapeHtml(achievement.description)}">${escapeHtml(achievement.name)}</a></td>`;
 
     // Player columns
     for (const status of statuses) {
       let statusClass = status ? 'combat-achievement-completed' : 'combat-achievement-not-completed';
       let statusText = status ? '\u2713' : '\u2717';
-      tableHtml += `<td class="${statusClass}" style="text-align: center;">${statusText}</td>`;
+      const statusLabel = status ? 'Completed' : 'Not completed';
+      tableHtml += `<td class="${statusClass}" aria-label="${statusLabel}" title="${statusLabel}" style="text-align: center;">${statusText}</td>`;
     }
 
     tableHtml += '</tr>';
@@ -1476,13 +1550,13 @@ function generateMusicTracksComparisonTable(comparisonData, musicTracksData) {
     return "<p>No player data found to compare music tracks.</p>";
   }
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Music track comparison" tabindex="0" style="height: 400px; overflow: auto;">';
   tableHtml += '<table class="interactive sticky-header music-tracks-table" style="width: 100%;">';
 
   // Header
   tableHtml += '<thead><tr><th>Music Track</th>';
   for (const player of players) {
-    tableHtml += `<th>${getDisplayName(player)}</th>`;
+    tableHtml += `<th>${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
@@ -1490,13 +1564,17 @@ function generateMusicTracksComparisonTable(comparisonData, musicTracksData) {
   tableHtml += '<tbody>';
   for (const track of musicTracks) {
     const statuses = players.map(player => {
-      const playerData = playerMusicTracks[player]?.[track];
-      return playerData === true;
+      const playerData = playerMusicTracks[player];
+      if (!playerData || !Object.hasOwn(playerData, track)) return null;
+      return playerData[track] === true;
     });
 
     let rowClass = '';
     const unlockedCount = statuses.filter(s => s === true).length;
-    if (unlockedCount === players.length) {
+    const knownCount = statuses.filter(s => s !== null).length;
+    if (knownCount === 0) {
+      rowClass = 'music-track-unknown';
+    } else if (unlockedCount === players.length) {
       rowClass = 'music-track-unlocked';
     } else if (unlockedCount > 0) {
       rowClass = 'diary-partial';
@@ -1507,9 +1585,9 @@ function generateMusicTracksComparisonTable(comparisonData, musicTracksData) {
     tableHtml += `<tr class="${rowClass}">`;
     const meta = musicTracksData && musicTracksData[track];
     if (meta && meta.nameWikiLink) {
-      tableHtml += `<td><a href="${meta.nameWikiLink}" target="_blank" style="text-decoration: none; color: inherit;">${track}</a></td>`;
+      tableHtml += `<td><a href="${safeWikiUrl(meta.nameWikiLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">${escapeHtml(track)}</a></td>`;
     } else {
-      tableHtml += `<td>${track}</td>`;
+      tableHtml += `<td>${escapeHtml(track)}</td>`;
     }
 
     for (const status of statuses) {
@@ -1518,11 +1596,15 @@ function generateMusicTracksComparisonTable(comparisonData, musicTracksData) {
       if (status === true) {
         statusClass = 'music-track-unlocked';
         statusText = '\u2713';
-      } else {
+      } else if (status === false) {
         statusClass = 'music-track-locked';
         statusText = '\u2717';
+      } else {
+        statusClass = 'music-track-unknown';
+        statusText = '?';
       }
-      tableHtml += `<td class="${statusClass}" style="text-align: center;">${statusText}</td>`;
+      const statusLabel = status === true ? 'Unlocked' : status === false ? 'Locked' : 'Not exposed by WikiSync';
+      tableHtml += `<td class="${statusClass}" aria-label="${statusLabel}" title="${statusLabel}" style="text-align: center;">${statusText}</td>`;
     }
     tableHtml += '</tr>';
   }
@@ -1555,7 +1637,7 @@ function generateMusicTracksComparisonTable(comparisonData, musicTracksData) {
 }
 
 function generateCollectionLogComparisonTable(comparisonData) {
-  const { players, playerCollectionLogs, collectionLogData } = comparisonData;
+  const { players, playerCollectionLogs, playerCollectionTotals = {}, collectionLogData } = comparisonData;
   if (players.length === 0) {
     return "<p>No player data found to compare collection logs.</p>";
   }
@@ -1567,7 +1649,7 @@ function generateCollectionLogComparisonTable(comparisonData) {
     );
   });
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Collection log comparison" tabindex="0" style="height: 400px; overflow: auto;">';
 
   tableHtml += '<table class="interactive sticky-header collection-log-table" style="width: 100%;">';
 
@@ -1576,7 +1658,7 @@ function generateCollectionLogComparisonTable(comparisonData) {
   tableHtml += '<th style="width: 50px;">Icon</th>';
   tableHtml += '<th>Item</th>';
   for (const player of players) {
-    tableHtml += `<th style="width: 80px;">${getDisplayName(player)}</th>`;
+    tableHtml += `<th style="width: 80px;">${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
@@ -1602,17 +1684,18 @@ function generateCollectionLogComparisonTable(comparisonData) {
     tableHtml += `<tr class="${rowClass}">`;
 
     // Item icon
-    tableHtml += `<td style="text-align: center;"><img src="${item.itemIcon}" alt="${item.itemName}" width="32" height="32" onerror="this.src='https://oldschool.runescape.wiki/images/Bank_filler.png'" style="image-rendering: pixelated;"></td>`;
+    tableHtml += `<td style="text-align: center;"><img src="${safeWikiUrl(item.itemIcon)}" alt="${escapeHtml(item.itemName)}" width="32" height="32" onerror="this.src='https://oldschool.runescape.wiki/images/Bank_filler.png'" style="image-rendering: pixelated;"></td>`;
 
     // Item name
-    tableHtml += `<td><a href="${item.itemLink}" target="_blank" style="text-decoration: none; color: inherit;">${item.itemName}</a></td>`;
+    tableHtml += `<td><a href="${safeWikiUrl(item.itemLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">${escapeHtml(item.itemName)}</a></td>`;
 
     // Player columns
     for (const player of players) {
       const hasItem = playerCollectionLogs[player] && playerCollectionLogs[player].includes(numericId);
       let statusClass = hasItem ? 'collection-has-item' : 'collection-missing-item';
       let statusText = hasItem ? '\u2713' : '\u2717';
-      tableHtml += `<td class="${statusClass}" style="text-align: center;">${statusText}</td>`;
+      const statusLabel = hasItem ? 'Collected' : 'Not collected';
+      tableHtml += `<td class="${statusClass}" aria-label="${statusLabel}" title="${statusLabel}" style="text-align: center;">${statusText}</td>`;
     }
 
     tableHtml += '</tr>';
@@ -1626,7 +1709,9 @@ function generateCollectionLogComparisonTable(comparisonData) {
   // Calculate total items for each player
   const totalItems = players.map(player => ({
     player,
-    total: playerCollectionLogs[player]?.length ?? 0
+    total: Number.isFinite(playerCollectionTotals[player])
+      ? playerCollectionTotals[player]
+      : (playerCollectionLogs[player]?.length ?? 0)
   }));
 
   const totalRankings = computeRankings(totalItems, 'total');
@@ -1651,13 +1736,13 @@ function generateActivitiesComparisonTable(comparisonData) {
     return "<p>No player data found to compare activities.</p>";
   }
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Activities comparison" tabindex="0" style="height: 400px; overflow: auto;">';
   tableHtml += '<table class="interactive sticky-header activities-comparison-table" style="width: 100%;">';
 
   // Header
   tableHtml += '<thead><tr><th>Activity</th>';
   for (const player of players) {
-    tableHtml += `<th>${getDisplayName(player)}</th>`;
+    tableHtml += `<th>${escapeHtml(getDisplayName(player))}</th>`;
   }
   tableHtml += '</tr></thead>';
 
@@ -1665,7 +1750,7 @@ function generateActivitiesComparisonTable(comparisonData) {
   tableHtml += '<tbody>';
   for (const activity of activities) {
     tableHtml += '<tr>';
-    tableHtml += `<td>${activity}</td>`;
+    tableHtml += `<td>${escapeHtml(activity)}</td>`;
 
     const activityScores = players.map(player => ({
       player,
@@ -1682,19 +1767,19 @@ function generateActivitiesComparisonTable(comparisonData) {
 
       const rankingClass = getRankingClass(score, rankings[player]);
 
-      tableHtml += `<td class="level-cell ${scoreClass}${rankingClass}" data-player="${player}" data-activity="${activity}" data-score="${score}">${score}</td>`;
+      tableHtml += `<td class="level-cell ${scoreClass}${rankingClass}" data-player="${escapeHtml(player)}" data-activity="${escapeHtml(activity)}" data-score="${score}">${score}</td>`;
     }
     tableHtml += '</tr>';
   }
 
   // Add total activities row
   tableHtml += '<tr class="sticky-total-row activities-total-row">';
-  tableHtml += '<td style="font-weight: bold; font-size: 1.1em;">Total Activities</td>';
+  tableHtml += '<td style="font-weight: bold; font-size: 1.1em;">Activities with Progress</td>';
 
-  // Calculate total activities for each player (sum of all activity scores)
+  // Different activities use incomparable units, so count active categories rather than summing scores.
   const totalActivities = players.map(player => ({
     player,
-    total: playerActivities[player] ? Object.values(playerActivities[player]).reduce((sum, score) => sum + (score || 0), 0) : 0
+    total: playerActivities[player] ? Object.values(playerActivities[player]).filter(score => score > 0).length : 0
   }));
 
   const totalRankings = computeRankings(totalActivities, 'total');
@@ -1715,7 +1800,8 @@ function generateActivitiesComparisonTable(comparisonData) {
 
 const TYPE_DISPLAY_NAMES = {
   collection_item: { singular: 'Collection Item', plural: 'Collection Items' },
-  activity: { singular: 'Activity', plural: 'Activities' }
+  activity: { singular: 'Activity', plural: 'Activities' },
+  sea_charting: { singular: 'Sea Charting', plural: 'Sea Charting' }
 };
 
 function formatTypeName(type, plural) {
@@ -1748,7 +1834,7 @@ function generateAchievementsTable(achievementsData) {
     typeStats[achievement.type]++;
   }
 
-  let tableHtml = '<div class="sunken-panel" style="height: 400px; overflow: auto;">';
+  let tableHtml = '<div class="sunken-panel" role="region" aria-label="Recent achievements" tabindex="0" style="height: 400px; overflow: auto;">';
 
   // Summary section
   tableHtml += '<div style="margin-bottom: 20px;">';
@@ -1758,7 +1844,7 @@ function generateAchievementsTable(achievementsData) {
   tableHtml += '<div style="display: flex; gap: 20px; margin-bottom: 15px;">';
   tableHtml += '<div><strong>By Player:</strong><br>';
   for (const [player, stats] of Object.entries(playerStats)) {
-    tableHtml += `${stats.displayName}: ${stats.count}<br>`;
+    tableHtml += `${escapeHtml(stats.displayName)}: ${stats.count}<br>`;
   }
   tableHtml += '</div>';
 
@@ -1795,7 +1881,8 @@ function generateAchievementsTable(achievementsData) {
     const ts = new Date(achievement.timestamp);
     const tsMs = ts.getTime();
     const timeDiff = tsMs - new Date(achievement.previousTimestamp).getTime();
-    const playerColor = playerColors[achievement.player] || '#999999';
+    const configuredColor = playerColors[achievement.player];
+    const playerColor = /^#[0-9a-f]{6}$/i.test(configuredColor || '') ? configuredColor : '#999999';
 
     // Consistent row styling - all rows get the same base styling
     let rowStyle = `background-color: ${playerColor}33;`; // 33 for transparency
@@ -1832,35 +1919,35 @@ function generateAchievementsTable(achievementsData) {
     }
 
     tableHtml += `<tr style="${rowStyle}" data-is-major="${isMajor ? 'true' : 'false'}">`;
-    tableHtml += `<td><strong style="color: ${playerColor};">${achievement.displayName}</strong></td>`;
+    tableHtml += `<td><strong style="color: ${playerColor};">${escapeHtml(achievement.displayName)}</strong></td>`;
 
     // Handle combat achievements with tier icons and links
     if (achievement.type === 'combat' && achievement.tierIconUrl && achievement.nameWikiLink) {
       tableHtml += `<td style="display: flex; align-items: center; gap: 8px;">`;
-      tableHtml += `<img src="${achievement.tierIconUrl}" alt="Tier" width="20" height="20" style="image-rendering: pixelated;">`;
-      tableHtml += `<a href="${achievement.nameWikiLink}" target="_blank" style="text-decoration: none; color: inherit;" title="${achievement.description || ''}">${achievement.name}</a>`;
+      tableHtml += `<img src="${safeWikiUrl(achievement.tierIconUrl)}" alt="Tier" width="20" height="20" style="image-rendering: pixelated;">`;
+      tableHtml += `<a href="${safeWikiUrl(achievement.nameWikiLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;" title="${escapeHtml(achievement.description || '')}">${escapeHtml(achievement.name)}</a>`;
       tableHtml += `</td>`;
     }
     // Handle collection log items with item icons and links
     else if (achievement.type === 'collection_item' && achievement.itemIcon && achievement.itemLink) {
       tableHtml += `<td style="display: flex; align-items: center; gap: 8px;">`;
-      tableHtml += `<img src="${achievement.itemIcon}" alt="${achievement.name}" width="20" height="20" style="image-rendering: pixelated;" onerror="this.src='https://oldschool.runescape.wiki/images/Bank_filler.png'">`;
-      tableHtml += `<a href="${achievement.itemLink}" target="_blank" style="text-decoration: none; color: inherit;">${achievement.name}</a>`;
+      tableHtml += `<img src="${safeWikiUrl(achievement.itemIcon)}" alt="${escapeHtml(achievement.name)}" width="20" height="20" style="image-rendering: pixelated;" onerror="this.src='https://oldschool.runescape.wiki/images/Bank_filler.png'">`;
+      tableHtml += `<a href="${safeWikiUrl(achievement.itemLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">${escapeHtml(achievement.name)}</a>`;
       tableHtml += `</td>`;
     } else if (achievement.type === 'activity' && achievement.activityIcon && achievement.activityLink) {
       tableHtml += `<td style="display: flex; align-items: center; gap: 8px;">`;
-      tableHtml += `<img src="${achievement.activityIcon}" alt="${achievement.name}" width="20" height="20" style="image-rendering: pixelated;" onerror="this.src='https://oldschool.runescape.wiki/images/Bank_filler.png'">`;
-      tableHtml += `<a href="${achievement.activityLink}" target="_blank" style="text-decoration: none; color: inherit;">${achievement.name}</a>`;
+      tableHtml += `<img src="${safeWikiUrl(achievement.activityIcon)}" alt="${escapeHtml(achievement.name)}" width="20" height="20" style="image-rendering: pixelated;" onerror="this.src='https://oldschool.runescape.wiki/images/Bank_filler.png'">`;
+      tableHtml += `<a href="${safeWikiUrl(achievement.activityLink)}" target="_blank" rel="noopener noreferrer" style="text-decoration: none; color: inherit;">${escapeHtml(achievement.name)}</a>`;
       tableHtml += `</td>`;
     } else if (achievement.type === 'level' && achievement.isMaxLevel) {
       // Highlight level 99 milestones with a golden badge and star
       tableHtml += `<td style="display: flex; align-items: center; gap: 8px;">` +
         `<span title="Level 99!" style="color: #FFD700;">\u2B50</span>` +
         `<span class="badge-99" style="background: #FFD700; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;">99</span>` +
-        `<span>${achievement.name}</span>` +
+        `<span>${escapeHtml(achievement.name)}</span>` +
         `</td>`;
     } else {
-      tableHtml += `<td>${achievement.name}</td>`;
+      tableHtml += `<td>${escapeHtml(achievement.name)}</td>`;
     }
 
     tableHtml += `<td>${formatTypeName(achievement.type, false)}</td>`;
@@ -1887,12 +1974,52 @@ function cloneChartData(data) {
   return JSON.parse(JSON.stringify(data));
 }
 
+function withResponsiveChartOptions(options) {
+  const compact = window.matchMedia('(max-width: 700px)').matches;
+  const responsiveOptions = {
+    ...options,
+    responsive: true,
+    maintainAspectRatio: false
+  };
+
+  if (!compact) return responsiveOptions;
+
+  responsiveOptions.layout = {
+    ...options.layout,
+    padding: 0
+  };
+  responsiveOptions.plugins = {
+    ...options.plugins,
+    legend: {
+      labels: {
+        boxWidth: 10,
+        boxHeight: 10,
+        padding: 8,
+        font: { size: 10 }
+      }
+    }
+  };
+  responsiveOptions.scales = {
+    ...options.scales,
+    x: {
+      ...options.scales?.x,
+      ticks: {
+        ...options.scales?.x?.ticks,
+        autoSkip: true,
+        maxRotation: 0,
+        maxTicksLimit: 4
+      }
+    }
+  };
+  return responsiveOptions;
+}
+
 function initializeCharts() {
   const ctx = document.getElementById('questChart').getContext('2d');
   questChart = new Chart(ctx, {
     type: 'line',
     data: cloneChartData(originalChartData),
-    options: {
+    options: withResponsiveChartOptions({
       scales: {
         x: {
           title: {
@@ -1914,14 +2041,14 @@ function initializeCharts() {
           threshold: 100
         }
       }
-    }
+    })
   });
 
   const totalLevelCtx = document.getElementById('totalLevelChart').getContext('2d');
   totalLevelChart = new Chart(totalLevelCtx, {
     type: 'line',
     data: cloneChartData(originalTotalLevelChartData),
-    options: {
+    options: withResponsiveChartOptions({
       scales: {
         x: {
           title: {
@@ -1943,7 +2070,7 @@ function initializeCharts() {
           threshold: 100
         }
       }
-    }
+    })
   });
 
   const totalExpCtx = document.getElementById('totalExpChart').getContext('2d');
@@ -1951,7 +2078,7 @@ function initializeCharts() {
   totalExpChart = new Chart(totalExpCtx, {
     type: 'line',
     data: cloneChartData(originalTotalExpChartData),
-    options: {
+    options: withResponsiveChartOptions({
       scales: {
         x: {
           title: {
@@ -1974,14 +2101,14 @@ function initializeCharts() {
           threshold: 100
         }
       }
-    }
+    })
   });
 
   const skillLevelCtx = document.getElementById('skillLevelChart').getContext('2d');
   skillLevelChart = new Chart(skillLevelCtx, {
     type: 'line',
     data: cloneChartData(originalSkillLevelChartData),
-    options: {
+    options: withResponsiveChartOptions({
       scales: {
         x: {
           title: {
@@ -2005,7 +2132,7 @@ function initializeCharts() {
           threshold: 100
         }
       }
-    }
+    })
   });
 
   // Apply initial time period filter to all charts
@@ -2022,6 +2149,7 @@ function initializeApp() {
 
   // Render tables from JSON data
   renderTables();
+  initializeWindowAccessibility();
 
   // Initialize charts with loaded data
   initializeCharts();
@@ -2051,8 +2179,18 @@ function initializeApp() {
 }
 
 async function boot() {
-  await loadAppData();
-  initializeApp();
+  try {
+    await loadAppData();
+    initializeApp();
+  } catch (error) {
+    console.error('Failed to start OSRS Tracker:', error);
+    const spinner = document.querySelector('.loading-spinner');
+    const message = document.querySelector('.loading-subtext');
+    if (spinner) spinner.style.display = 'none';
+    if (message) {
+      message.textContent = 'Dashboard data could not be loaded. Please refresh after the next tracker update.';
+    }
+  }
 }
 
 if (document.readyState === 'loading') {

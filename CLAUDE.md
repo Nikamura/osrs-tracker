@@ -14,6 +14,7 @@ npm run fetch-data
 
 # Remove duplicate consecutive data files
 npm run cleanup
+npm run cleanup:dry-run
 
 # Generate static HTML dashboard
 npm run generate
@@ -30,14 +31,17 @@ npm run fetch-combat-achievements
 npm run fetch-collection-log
 npm run fetch-music-tracks
 npm run fetch-quests
+
+# Regression suite
+npm test
 ```
 
 ## Architecture
 
 ### Data Flow
-1. `data_fetcher.js` fetches player data from RuneLite API and OSRS highscores, saves timestamped JSON files to `player_data/{username}/`
-2. `cleanup_player_data.js` removes duplicate consecutive snapshots (compares JSON content excluding timestamp)
-3. `generate_static.js` reads all player data and game metadata, generates `public/index.html` with embedded data and Chart.js visualizations
+1. `data_fetcher.js` fetches and validates a complete batch from WikiSync and official OSRS hiscores before atomically saving timestamped snapshots
+2. `cleanup_player_data.js` removes per-player consecutive snapshots when tracked progress is unchanged (timestamp and rank churn are ignored)
+3. `generate_static.js` validates game metadata, incrementally reads player snapshots, and atomically generates `public/index.html` plus JSON data files
 
 ### Key Files
 - `config.js` - Central configuration: player list, display names, colors, ironman players
@@ -48,7 +52,7 @@ npm run fetch-quests
 
 ### Data Sources
 - RuneLite API: `https://sync.runescape.wiki/runelite/player/{username}/STANDARD`
-- OSRS Highscores: `https://secure.runescape.com/m=hiscore_oldschool/index_lite.json`
+- OSRS Highscores: `https://services.runescape.com/m=hiscore_oldschool/index_lite.json`
 - Game metadata scraped from OSRS Wiki pages
 
 ### Configuration
@@ -62,7 +66,7 @@ Edit `PLAYER_CONFIG` in `config.js` to add/remove players. Required fields:
 Time-series charts use daily aggregation (Europe/Vilnius timezone) - only the latest snapshot per player per day is shown. Comparison tables use full detail.
 
 ## Tech Stack
-- Node.js with ES modules (`"type": "module"`)
+- Node.js 24.15-24.x or 26+ with ES modules (`"type": "module"`)
 - Express 5.x for static file serving
 - Chart.js for visualizations (embedded in generated HTML)
 - 98.css for Windows 98 aesthetic

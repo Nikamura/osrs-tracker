@@ -1,8 +1,9 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import https from "node:https";
+import { pathToFileURL } from "node:url";
 import { PLAYER_CONFIG, CHART_COLORS } from "./config.js";
 import {
+  CACHE_VERSION,
   loadCacheIndex,
   saveCacheIndex,
   loadCacheData,
@@ -23,6 +24,8 @@ if (!USE_CACHE) {
 
 // Map alternate quest names from various data sources to canonical wiki names
 const QUEST_NAME_ALIASES = {
+  // Temporary WikiSync upstream mismatch (the API currently exposes this quest as ".").
+  ".": "Fallen From Grace",
   "Recipe for Disaster - Another Cook's Quest": "Recipe for Disaster/Another Cook's Quest",
   "Recipe for Disaster - Culinaromancer": "Recipe for Disaster/Defeating the Culinaromancer",
   "Recipe for Disaster - Evil Dave": "Recipe for Disaster/Freeing Evil Dave",
@@ -35,11 +38,18 @@ const QUEST_NAME_ALIASES = {
   "Recipe for Disaster - Wartface & Bentnoze": "Recipe for Disaster/Freeing the Goblin generals"
 };
 
-function normalizeQuestName(questName) {
+const COLLECTION_ITEM_ALIASES = new Map([
+  [29472, 12013],
+  [29474, 12014],
+  [29476, 12015],
+  [29478, 12016]
+]);
+
+export function normalizeQuestName(questName) {
   return QUEST_NAME_ALIASES[questName] || questName;
 }
 
-function normalizeQuestStatuses(quests) {
+export function normalizeQuestStatuses(quests) {
   if (!quests) return {};
   const normalized = {};
   for (const [questName, status] of Object.entries(quests)) {
@@ -50,6 +60,23 @@ function normalizeQuestStatuses(quests) {
     }
   }
   return normalized;
+}
+
+function normalizeCollectionItemId(itemId) {
+  const numericItemId = Number(itemId);
+  return COLLECTION_ITEM_ALIASES.get(numericItemId) || numericItemId;
+}
+
+export function normalizeCollectionLogItems(items) {
+  return [...new Set((items || []).map(normalizeCollectionItemId).filter(Number.isFinite))];
+}
+
+function getCollectionLogTotal(data) {
+  const officialTotal = data.activities?.find(activity => activity.name === 'Collections Logged')?.score;
+  if (Number.isFinite(officialTotal) && officialTotal >= 0) {
+    return officialTotal;
+  }
+  return normalizeCollectionLogItems(data.collection_log).length;
 }
 
 // Keep only the latest entry per calendar day (Europe/Vilnius)
@@ -65,6 +92,49 @@ function groupLatestPerDay(entries) {
     }
   }
   return [...byDay.values()].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+function addLatestPerDay(entries, entry) {
+  const entryDay = new Date(entry.timestamp).toLocaleDateString('en-CA', { timeZone: 'Europe/Vilnius' });
+  const lastEntry = entries.at(-1);
+  if (!lastEntry) {
+    entries.push(entry);
+    return;
+  }
+
+  const lastDay = new Date(lastEntry.timestamp).toLocaleDateString('en-CA', { timeZone: 'Europe/Vilnius' });
+  if (lastDay === entryDay) {
+    if (new Date(entry.timestamp) >= new Date(lastEntry.timestamp)) {
+      entries[entries.length - 1] = entry;
+    }
+    return;
+  }
+
+  entries.push(entry);
+}
+
+function atomicWrite(filePath, contents) {
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  writeFileSync(temporaryPath, contents);
+  renameSync(temporaryPath, filePath);
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character]);
+}
+
+export function parseSnapshotTimestamp(filename) {
+  const match = filename.match(/_(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\.json$/);
+  if (!match) {
+    throw new Error(`Snapshot filename has no ISO timestamp: ${filename}`);
+  }
+  return new Date(match[1]);
 }
 
 function getDisplayName(playerDir) {
@@ -163,9 +233,9 @@ function getCombatAchievementsComparisonData(playerDataMap, combatAchievementsDa
   };
 }
 
-function getMusicTracksComparisonData(playerDataMap) {
+function getMusicTracksComparisonData(playerDataMap, musicTracksData) {
   const latestPlayerData = {};
-  const allMusicTracks = new Set();
+  const allMusicTracks = new Set(Object.keys(musicTracksData || {}));
 
   for (const [player, playerInfo] of Object.entries(playerDataMap)) {
     const data = playerInfo.latestData;
@@ -190,7 +260,7 @@ function getMusicTracksComparisonData(playerDataMap) {
 function generateAllChartData(playerDataMap, cacheIndex, gameData) {
   // Try to load cached chart data (incremental format with per-player progress)
   const cachedChartData = USE_CACHE ? loadCacheData('chart_data.json') : null;
-  const hasCache = cachedChartData !== null && cachedChartData.processedFiles;
+  const hasCache = cachedChartData?.cacheVersion === CACHE_VERSION && cachedChartData.processedFiles;
 
   // Process all files once for all chart types
   const questProgressData = {};
@@ -221,35 +291,44 @@ function generateAllChartData(playerDataMap, cacheIndex, gameData) {
     const snapshots = cachedLatestFile
       ? loadNewSnapshotsForPlayer(playerInfo, cachedLatestFile)
       : loadAllSnapshotsForPlayer(playerInfo);
+    const candidateFiles = cachedLatestFile
+      ? getNewFilesForPlayer(playerInfo, cachedLatestFile)
+      : playerInfo.allFiles;
+    const pendingFileCount = cachedLatestFile && candidateFiles[0] === cachedLatestFile
+      ? candidateFiles.length - 1
+      : candidateFiles.length;
 
-    if (snapshots.length > 0) {
-      totalNewFiles += snapshots.length;
-      console.log(`Processing ${snapshots.length} new chart files for ${player}`);
+    if (pendingFileCount > 0) {
+      totalNewFiles += pendingFileCount;
+      console.log(`Processing ${pendingFileCount} new chart files for ${player}`);
     }
 
     for (const { filename, data } of snapshots) {
-      const timestamp = new Date(filename.split('_')[1].replace('.json', ''));
+      const timestamp = parseSnapshotTimestamp(filename);
 
       if (data.quests) {
-        const completedQuests = Object.values(data.quests).filter(status => status === 2).length;
-        questProgressData[player].push({ timestamp, completedQuests });
+        const normalizedQuests = normalizeQuestStatuses(data.quests);
+        const completedQuests = Object.entries(normalizedQuests).filter(([questName, status]) =>
+          status === 2 && gameData.knownQuestNames.has(questName)
+        ).length;
+        addLatestPerDay(questProgressData[player], { timestamp, completedQuests });
       }
 
       if (data.levels) {
         const totalLevel = Object.values(data.levels).reduce((sum, level) => sum + (level || 0), 0);
-        totalLevelProgressData[player].push({ timestamp, totalLevel });
+        addLatestPerDay(totalLevelProgressData[player], { timestamp, totalLevel });
       }
 
       if (data.skills && Array.isArray(data.skills)) {
         const overallSkill = data.skills.find(s => s.name === 'Overall');
         if (overallSkill && overallSkill.xp > 0) {
-          totalExpProgressData[player].push({ timestamp, totalExp: overallSkill.xp });
+          addLatestPerDay(totalExpProgressData[player], { timestamp, totalExp: overallSkill.xp });
         }
       }
 
       if (data.levels) {
         Object.keys(data.levels).forEach(skill => allSkills.add(skill));
-        skillLevelProgressData[player].push({ timestamp, skillLevels: { ...data.levels } });
+        addLatestPerDay(skillLevelProgressData[player], { timestamp, skillLevels: { ...data.levels } });
       }
     }
 
@@ -284,6 +363,7 @@ function generateAllChartData(playerDataMap, cacheIndex, gameData) {
   // Cache the per-player progress data for incremental updates
   if (USE_CACHE) {
     saveCacheData('chart_data.json', {
+      cacheVersion: CACHE_VERSION,
       processedFiles,
       allSkills: [...allSkills].sort(),
       questProgressData,
@@ -377,8 +457,8 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
 
   // Load cached achievements
   let cachedAchievements = USE_CACHE ? loadCacheData('achievements.json') : null;
-  if (!cachedAchievements) {
-    cachedAchievements = { achievements: [], processedFiles: {} };
+  if (cachedAchievements?.cacheVersion !== CACHE_VERSION) {
+    cachedAchievements = { cacheVersion: CACHE_VERSION, achievements: [], processedFiles: {} };
   }
 
   // Convert cached timestamps back to Date objects
@@ -432,8 +512,8 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
         const currentData = JSON.parse(readFileSync(path.join(playerDir, currentFile), "utf-8"));
         const previousData = cachedPreviousData || JSON.parse(readFileSync(path.join(playerDir, previousFile), "utf-8"));
 
-        const currentTimestamp = new Date(currentFile.split('_')[1].replace('.json', ''));
-        const previousTimestamp = new Date(previousFile.split('_')[1].replace('.json', ''));
+        const currentTimestamp = parseSnapshotTimestamp(currentFile);
+        const previousTimestamp = parseSnapshotTimestamp(previousFile);
 
         const currentQuests = normalizeQuestStatuses(currentData.quests);
         const previousQuests = normalizeQuestStatuses(previousData.quests);
@@ -567,28 +647,25 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
           }
         }
 
-        // Check for collection log progress
-        if (currentData.collectionLogItemCount !== null && currentData.collectionLogItemCount !== undefined) {
-          const currentCount = currentData.collectionLogItemCount;
-          const previousCount = (previousData.collectionLogItemCount !== null && previousData.collectionLogItemCount !== undefined)
-            ? previousData.collectionLogItemCount
-            : (Array.isArray(previousData.collection_log) ? previousData.collection_log.length : 0);
-          if (currentCount > previousCount) {
-            newAchievements.push({
-              player: player,
-              type: 'collection',
-              name: `Collection Log (${previousCount} → ${currentCount} items)`,
-              timestamp: currentTimestamp,
-              previousTimestamp: previousTimestamp,
-              displayName: getDisplayName(player)
-            });
-          }
+        // Use Jagex's official hiscore total. WikiSync's collectionLogItemCount
+        // comes from a game varp that upstream documents as unreliable.
+        const currentCollectionCount = getCollectionLogTotal(currentData);
+        const previousCollectionCount = getCollectionLogTotal(previousData);
+        if (currentCollectionCount > previousCollectionCount) {
+          newAchievements.push({
+            player: player,
+            type: 'collection',
+            name: `Collection Log (${previousCollectionCount} → ${currentCollectionCount} items)`,
+            timestamp: currentTimestamp,
+            previousTimestamp: previousTimestamp,
+            displayName: getDisplayName(player)
+          });
         }
 
         // Check for individual collection log item completions
         if (currentData.collection_log) {
-          const currentItems = new Set(currentData.collection_log);
-          const previousItems = new Set(previousData.collection_log || []);
+          const currentItems = new Set(normalizeCollectionLogItems(currentData.collection_log));
+          const previousItems = new Set(normalizeCollectionLogItems(previousData.collection_log));
 
           const newItems = [...currentItems].filter(itemId => !previousItems.has(itemId));
 
@@ -648,14 +725,34 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
           }
         }
 
+        // Sailing sea charting is exposed as completed task IDs by WikiSync.
+        if (Array.isArray(currentData.sea_charting) && Array.isArray(previousData.sea_charting)) {
+          const currentCount = new Set(currentData.sea_charting).size;
+          const previousCount = new Set(previousData.sea_charting || []).size;
+          if (currentCount > previousCount) {
+            newAchievements.push({
+              player,
+              type: 'sea_charting',
+              name: `Sea Charting (${previousCount} → ${currentCount} tasks)`,
+              timestamp: currentTimestamp,
+              previousTimestamp,
+              displayName: getDisplayName(player),
+              isMajorAchievement: false
+            });
+          }
+        }
+
         // Check for activity score increases
         if (currentData.activities && previousData.activities) {
           const currentActivitiesMap = new Map(currentData.activities.map(a => [a.name, a.score]));
           const previousActivitiesMap = new Map(previousData.activities.map(a => [a.name, a.score]));
 
           for (const [activityName, currentScore] of currentActivitiesMap) {
-            const previousScore = previousActivitiesMap.get(activityName) ?? -1;
-            if (currentScore > previousScore) {
+            if (activityName === 'Collections Logged' || !previousActivitiesMap.has(activityName)) {
+              continue;
+            }
+            const previousScore = previousActivitiesMap.get(activityName);
+            if (currentScore > 0 && currentScore > previousScore) {
               newAchievements.push({
                 player: player,
                 type: 'activity',
@@ -682,7 +779,17 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
   }
 
   // Merge existing and new achievements
-  const allAchievements = [...existingAchievements, ...newAchievements];
+  // Reprocessing is necessary when cleanup removed the cache's last file. Keep
+  // cached history, but collapse the repeated events generated by that rebuild.
+  const achievementsByKey = new Map();
+  for (const achievement of [...existingAchievements, ...newAchievements]) {
+    const timestamp = achievement.timestamp instanceof Date
+      ? achievement.timestamp.toISOString()
+      : achievement.timestamp;
+    const key = JSON.stringify([achievement.player, achievement.type, achievement.name, timestamp]);
+    achievementsByKey.set(key, achievement);
+  }
+  const allAchievements = [...achievementsByKey.values()];
 
   // Sort achievements by timestamp (most recent first)
   allAchievements.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -690,6 +797,7 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
   // Save updated cache
   if (USE_CACHE) {
     saveCacheData('achievements.json', {
+      cacheVersion: CACHE_VERSION,
       achievements: allAchievements.map(a => ({
         ...a,
         timestamp: a.timestamp.toISOString(),
@@ -712,47 +820,52 @@ function getAchievementsData(playerDataMap, cacheIndex, gameData) {
 
 function getCollectionLogComparisonData(playerDataMap, collectionLogData) {
   const latestPlayerData = {};
+  const playerCollectionTotals = {};
 
   for (const [player, playerInfo] of Object.entries(playerDataMap)) {
     const data = playerInfo.latestData;
 
     if (data.collection_log) {
-      latestPlayerData[player] = data.collection_log;
+      latestPlayerData[player] = normalizeCollectionLogItems(data.collection_log);
+      playerCollectionTotals[player] = getCollectionLogTotal(data);
     }
   }
 
   return {
     players: Object.keys(latestPlayerData).sort(),
     playerCollectionLogs: latestPlayerData,
+    playerCollectionTotals,
     collectionLogData: collectionLogData,
   };
 }
 
-function generatePlayerSelectionUI() {
-  const players = readdirSync("player_data").filter(p => !p.startsWith('.'));
+function generatePlayerSelectionUI(players) {
   if (players.length === 0) {
     return "<p>No players found.</p>";
   }
 
-  let selectionHtml = '<div class="player-selection" style="margin-bottom: 20px;">';
+  let selectionHtml = '<div class="player-selection">';
   selectionHtml += '<h3>Player Selection</h3>';
-  selectionHtml += '<div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 10px;">';
+  selectionHtml += '<div class="player-options">';
 
-  for (const player of players.sort()) {
+  for (const [index, player] of players.sort().entries()) {
     const displayName = getDisplayName(player);
+    const inputId = `player-option-${index}`;
     selectionHtml += `
-      <label style="display: flex; align-items: center; gap: 5px;" class="player-label">
-        <input type="checkbox" id="player-${player}" value="${player}" checked onchange="updatePlayerSelection()">
-        <span class="player-name">${displayName}</span>
-      </label>
+      <div class="player-option">
+        <input type="checkbox" id="${inputId}" value="${escapeHtml(player)}" checked onchange="updatePlayerSelection()">
+        <label class="player-label" for="${inputId}">
+          <span class="player-name">${escapeHtml(displayName)}</span>
+        </label>
+      </div>
     `;
   }
 
   selectionHtml += '</div>';
-  selectionHtml += '<div style="margin-top: 10px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">';
+  selectionHtml += '<div class="player-actions">';
   selectionHtml += '<button onclick="selectAllPlayers()">Select All</button>';
   selectionHtml += '<button onclick="deselectAllPlayers()">Deselect All</button>';
-  selectionHtml += '<label style="margin-left: 10px; display: flex; align-items: center; gap: 5px;">Time Period:';
+  selectionHtml += '<label class="time-period-control">Time Period:';
   selectionHtml += '<select id="timePeriodSelect" onchange="updateTimePeriod()">';
   selectionHtml += '<option value="30">Last 30 days</option>';
   selectionHtml += '<option value="60">Last 60 days</option>';
@@ -783,21 +896,23 @@ function generateWindowVisibilityUI() {
     { id: 'recent-achievements--progress', name: 'Recent Achievements & Progress', enabled: true }
   ];
 
-  let visibilityHtml = '<div class="window-visibility" style="margin-bottom: 15px;">';
+  let visibilityHtml = '<div class="window-visibility">';
   visibilityHtml += '<h3>Window Visibility</h3>';
-  visibilityHtml += '<div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 10px;">';
+  visibilityHtml += '<div class="window-options">';
 
   for (const window of windows) {
     visibilityHtml += `
-      <label style="display: flex; align-items: center; gap: 5px;" class="window-label">
+      <div class="window-option">
         <input type="checkbox" id="window-${window.id}" value="${window.id}" ${window.enabled ? 'checked' : ''} onchange="updateWindowVisibility()">
-        <span class="window-name">${window.name}</span>
-      </label>
+        <label class="window-label" for="window-${window.id}">
+          <span class="window-name">${window.name}</span>
+        </label>
+      </div>
     `;
   }
 
   visibilityHtml += '</div>';
-  visibilityHtml += '<div style="margin-top: 10px;">';
+  visibilityHtml += '<div class="window-actions">';
   visibilityHtml += '<button onclick="showAllWindows()">Show All</button>';
   visibilityHtml += '<button onclick="hideAllWindows()" style="margin-left: 10px;">Hide All</button>';
   visibilityHtml += '</div>';
@@ -831,11 +946,16 @@ function getActivitiesComparisonData(playerDataMap) {
     if (data.activities && Array.isArray(data.activities)) {
       const playerActivities = {};
       data.activities.forEach(activity => {
-        if (activity.score > -1 && !IGNORED_ACTIVITIES.has(activity.name)) {
+        if (activity.score > 0 && !IGNORED_ACTIVITIES.has(activity.name)) {
           playerActivities[activity.name] = activity.score;
           allActivities.add(activity.name);
         }
       });
+
+      if (Array.isArray(data.sea_charting)) {
+        playerActivities['Sea charting tasks'] = new Set(data.sea_charting).size;
+        allActivities.add('Sea charting tasks');
+      }
       latestPlayerData[player] = playerActivities;
     }
   }
@@ -847,7 +967,7 @@ function getActivitiesComparisonData(playerDataMap) {
   };
 }
 
-async function generateStaticHTML() {
+export async function generateStaticHTML() {
   mkdirSync('public', { recursive: true });
 
   console.log('Generating static HTML...');
@@ -877,7 +997,7 @@ async function generateStaticHTML() {
     const levelComparisonData = getLevelComparisonData(playerDataMap);
     const achievementDiaryComparisonData = getAchievementDiaryComparisonData(playerDataMap);
     const combatAchievementsComparisonData = getCombatAchievementsComparisonData(playerDataMap, gameData.combatAchievements);
-    const musicTracksComparisonData = getMusicTracksComparisonData(playerDataMap);
+    const musicTracksComparisonData = getMusicTracksComparisonData(playerDataMap, gameData.musicTracks);
     const collectionLogComparisonData = getCollectionLogComparisonData(playerDataMap, gameData.collectionLog);
     const activitiesComparisonData = getActivitiesComparisonData(playerDataMap);
 
@@ -914,7 +1034,7 @@ async function generateStaticHTML() {
       saveCacheIndex(cacheIndex);
     }
 
-    const playerSelectionHtml = generatePlayerSelectionUI();
+    const playerSelectionHtml = generatePlayerSelectionUI(Object.keys(playerDataMap));
     const windowVisibilityHtml = generateWindowVisibilityUI();
 
     const generatedAt = new Date().toLocaleString('en-US', {
@@ -930,8 +1050,9 @@ async function generateStaticHTML() {
 
     // Write JSON data files
     mkdirSync('public/data', { recursive: true });
+    const dataVersion = Date.now();
 
-    writeFileSync('public/data/chart-data.json', JSON.stringify({
+    atomicWrite('public/data/chart-data.json', JSON.stringify({
       questChart: chartData,
       totalLevelChart: totalLevelChartData,
       totalExpChart: totalExpChartData,
@@ -939,7 +1060,7 @@ async function generateStaticHTML() {
       skillLevelChart: skillLevelChartData
     }));
 
-    writeFileSync('public/data/player-config.json', JSON.stringify({
+    atomicWrite('public/data/player-config.json', JSON.stringify({
       displayToPlayer: Object.fromEntries(
         PLAYER_CONFIG.players.map(p => [getDisplayName(p), p])
       ),
@@ -960,7 +1081,7 @@ async function generateStaticHTML() {
     // Remove questCapeRequiredNames (it's a Set, not needed client-side)
     const { questCapeRequiredNames, ...questDataForClient } = questComparisonData;
 
-    writeFileSync('public/data/table-data.json', JSON.stringify({
+    atomicWrite('public/data/table-data.json', JSON.stringify({
       quests: questDataForClient,
       levels: levelComparisonData,
       achievementDiaries: achievementDiaryComparisonData,
@@ -972,19 +1093,20 @@ async function generateStaticHTML() {
       achievements: serializedAchievements
     }));
 
-    const dataVersion = Date.now();
-
     const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#008080">
   <title>OSRS Tracker</title>
-  <link rel="stylesheet" href="https://unpkg.com/98.css">
+  <link rel="stylesheet" href="https://unpkg.com/98.css@0.1.21/dist/98.css">
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
   <!-- 100% privacy-first analytics -->
   <script data-collect-dnt="true" async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
 </head>
-<body class="loading" style="background-color: #008080;">
+<body class="loading" data-version="${dataVersion}" style="background-color: #008080;">
   <noscript><img src="https://queue.simpleanalyticscdn.com/noscript.gif?collect-dnt=true" alt="" referrerpolicy="no-referrer-when-downgrade"/></noscript>
   <!-- Loading screen -->
   <div class="loading-screen" id="loadingScreen">
@@ -997,7 +1119,7 @@ async function generateStaticHTML() {
 
   <div class="generated-at">Generated: ${generatedAt}</div>
   <div class="container">
-    <div class="window main-window">
+    <div class="window main-window configuration-window">
       <div class="title-bar">
         <div class="title-bar-text">Configuration</div>
         <div class="title-bar-controls">
@@ -1018,7 +1140,7 @@ async function generateStaticHTML() {
         </div>
       </div>
       <div class="window-body">
-        <div style="max-width: 800px; max-height: 600px;">
+        <div class="chart-frame">
           <canvas id="questChart"></canvas>
         </div>
       </div>
@@ -1032,7 +1154,7 @@ async function generateStaticHTML() {
         </div>
       </div>
       <div class="window-body">
-        <div style="max-width: 800px; max-height: 600px;">
+        <div class="chart-frame">
           <canvas id="totalLevelChart"></canvas>
         </div>
       </div>
@@ -1046,10 +1168,10 @@ async function generateStaticHTML() {
         </div>
       </div>
       <div class="window-body">
-        <div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
+        <div class="chart-toolbar">
           <button id="btn-totalxp-scale">Log scale: On</button>
         </div>
-        <div style="max-width: 800px; max-height: 600px;">
+        <div class="chart-frame">
           <canvas id="totalExpChart"></canvas>
         </div>
       </div>
@@ -1063,15 +1185,15 @@ async function generateStaticHTML() {
         </div>
       </div>
       <div class="window-body">
-        <div style="margin-bottom: 15px;">
+        <div class="skill-control">
           <label for="skillSelect">Select Skill: </label>
           <select id="skillSelect" onchange="updateSkillChart()" style="margin-left: 10px; padding: 5px;">
             ${skillLevelProgressData.availableSkills.map(skill =>
-      `<option value="${skill}" ${skill === defaultSkill ? 'selected' : ''}>${skill}</option>`
+      `<option value="${escapeHtml(skill)}" ${skill === defaultSkill ? 'selected' : ''}>${escapeHtml(skill)}</option>`
     ).join('')}
           </select>
         </div>
-        <div style="max-width: 800px; max-height: 600px;">
+        <div class="chart-frame">
           <canvas id="skillLevelChart"></canvas>
         </div>
       </div>
@@ -1174,24 +1296,28 @@ async function generateStaticHTML() {
     </div>
   </div>
   <script src="js/init.js"></script>
-  <script>window.__dataVersion='${dataVersion}';</script>
   <script src="js/app.js"></script>
 </body>
 </html>`;
 
 
-    writeFileSync('public/index.html', htmlContent, 'utf-8');
+    // Publish the HTML last so a fresh navigation only sees a complete generation.
+    atomicWrite('public/index.html', htmlContent);
     console.log('Static HTML generated successfully at public/index.html');
     console.log(`Generated at: ${generatedAt}`);
 
   } catch (error) {
     console.error('Error generating static HTML:', error);
-    process.exit(1);
+    throw error;
   }
 }
 
-// Run the generator
-generateStaticHTML().catch(error => {
-  console.error('Error in generateStaticHTML:', error);
-  process.exit(1);
-});
+const isMainModule = process.argv[1]
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (isMainModule) {
+  generateStaticHTML().catch(error => {
+    console.error('Error in generateStaticHTML:', error);
+    process.exitCode = 1;
+  });
+}

@@ -23,6 +23,18 @@
         if (savedStates[windowId]) {
           windowElement.classList.add('minimized');
         }
+
+        const windowBody = windowElement.querySelector('.window-body');
+        const minimizeButton = windowElement.querySelector('.title-bar-controls button[onclick^="toggleWindow"]');
+        if (windowBody && minimizeButton) {
+          const bodyId = 'window-body-' + windowId;
+          const isMinimized = windowElement.classList.contains('minimized');
+          windowBody.id = bodyId;
+          minimizeButton.setAttribute('aria-controls', bodyId);
+          minimizeButton.setAttribute('aria-expanded', String(!isMinimized));
+          minimizeButton.setAttribute('aria-label', isMinimized ? 'Restore' : 'Minimize');
+          minimizeButton.setAttribute('title', (isMinimized ? 'Restore ' : 'Minimize ') + titleText.textContent.trim());
+        }
       }
     });
   } catch (e) {

@@ -1,8 +1,14 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const CACHE_DIR = "cache";
-const CACHE_VERSION = 2;
+export const CACHE_VERSION = 3;
+
+function atomicWrite(filePath, contents) {
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  writeFileSync(temporaryPath, contents);
+  renameSync(temporaryPath, filePath);
+}
 
 /**
  * Load cache index and validate version
@@ -27,7 +33,7 @@ export function loadCacheIndex() {
 export function saveCacheIndex(index) {
   ensureCacheDir();
   const indexPath = path.join(CACHE_DIR, "index.json");
-  writeFileSync(indexPath, JSON.stringify(index, null, 2));
+  atomicWrite(indexPath, JSON.stringify(index, null, 2));
 }
 
 /**
@@ -48,7 +54,7 @@ export function loadCacheData(filename) {
 export function saveCacheData(filename, data) {
   ensureCacheDir();
   const filePath = path.join(CACHE_DIR, filename);
-  writeFileSync(filePath, JSON.stringify(data));
+  atomicWrite(filePath, JSON.stringify(data));
 }
 
 /**
@@ -90,7 +96,9 @@ export function isPlayerCacheValid(cacheIndex, player) {
  */
 export function getPlayerList() {
   try {
-    return readdirSync("player_data").filter(p => !p.startsWith('.'));
+    return readdirSync("player_data", { withFileTypes: true })
+      .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+      .map(entry => entry.name);
   } catch {
     return [];
   }
@@ -131,13 +139,13 @@ export function loadAllPlayerData(players) {
 /**
  * Load all snapshot data for a player (for chart/achievement processing)
  */
-export function loadAllSnapshotsForPlayer(playerInfo) {
+export function* loadAllSnapshotsForPlayer(playerInfo) {
   const { playerDir, allFiles } = playerInfo;
-  return allFiles.map(file => {
+  for (const file of allFiles) {
     const filePath = path.join(playerDir, file);
     const data = JSON.parse(readFileSync(filePath, "utf-8"));
-    return { filename: file, data };
-  });
+    yield { filename: file, data };
+  }
 }
 
 /**
@@ -163,7 +171,7 @@ export function getNewFilesForPlayer(playerInfo, cachedLatestFile) {
 /**
  * Load only new snapshot files for a player (after cachedLatestFile)
  */
-export function loadNewSnapshotsForPlayer(playerInfo, cachedLatestFile) {
+export function* loadNewSnapshotsForPlayer(playerInfo, cachedLatestFile) {
   const { playerDir } = playerInfo;
   const newFiles = getNewFilesForPlayer(playerInfo, cachedLatestFile);
 
@@ -172,11 +180,20 @@ export function loadNewSnapshotsForPlayer(playerInfo, cachedLatestFile) {
     ? newFiles.slice(1)
     : newFiles;
 
-  return filesToLoad.map(file => {
+  for (const file of filesToLoad) {
     const filePath = path.join(playerDir, file);
     const data = JSON.parse(readFileSync(filePath, "utf-8"));
-    return { filename: file, data };
-  });
+    yield { filename: file, data };
+  }
+}
+
+function readGameDataArray(filename, minimumItems) {
+  const filePath = path.join("game_data", filename);
+  const data = JSON.parse(readFileSync(filePath, "utf-8"));
+  if (!Array.isArray(data) || data.length < minimumItems) {
+    throw new Error(`${filePath} contains ${Array.isArray(data) ? data.length : 'invalid'} items; expected at least ${minimumItems}`);
+  }
+  return data;
 }
 
 /**
@@ -193,52 +210,34 @@ export function loadGameData() {
     musicTracks: {}
   };
 
-  // Load quests
   try {
-    const questsJson = readFileSync("game_data/quests.json", "utf-8");
-    const quests = JSON.parse(questsJson);
+    const quests = readGameDataArray("quests.json", 200);
     gameData.quests = quests;
-    gameData.questMetaByName = quests.reduce((acc, q) => {
-      acc[q.name] = q;
+    gameData.questMetaByName = quests.reduce((acc, quest) => {
+      acc[quest.name] = quest;
       return acc;
     }, {});
-    gameData.knownQuestNames = new Set(quests.map(q => q.name));
-    gameData.questCapeRequiredNames = new Set(quests.filter(q => !q.isMiniquest).map(q => q.name));
-  } catch (error) {
-    console.warn("Failed to load quests data:", error.message);
-  }
+    gameData.knownQuestNames = new Set(quests.map(quest => quest.name));
+    gameData.questCapeRequiredNames = new Set(quests.filter(quest => !quest.isMiniquest).map(quest => quest.name));
 
-  // Load combat achievements
-  try {
-    const combatAchievementsFile = readFileSync("game_data/combat_achievements.json", "utf-8");
-    const combatAchievements = JSON.parse(combatAchievementsFile);
+    const combatAchievements = readGameDataArray("combat_achievements.json", 600);
     combatAchievements.forEach(achievement => {
       gameData.combatAchievements[achievement.taskId] = achievement;
     });
-  } catch (error) {
-    console.warn("Failed to load combat achievements data:", error.message);
-  }
 
-  // Load collection log
-  try {
-    const collectionLogFile = readFileSync("game_data/collection_log.json", "utf-8");
-    const collectionLogItems = JSON.parse(collectionLogFile);
+    const collectionLogItems = readGameDataArray("collection_log.json", 1_600);
     collectionLogItems.forEach(item => {
       gameData.collectionLog[item.itemId] = item;
     });
-  } catch (error) {
-    console.warn("Failed to load collection log data:", error.message);
-  }
 
-  // Load music tracks
-  try {
-    const musicTracksFile = readFileSync("game_data/music_tracks.json", "utf-8");
-    const tracks = JSON.parse(musicTracksFile);
+    const tracks = readGameDataArray("music_tracks.json", 800);
     tracks.forEach(track => {
       gameData.musicTracks[track.name] = track;
     });
   } catch (error) {
-    console.warn("Failed to load music tracks data:", error.message);
+    throw new Error(`Game metadata is missing or invalid. Run \"npm run fetch-game-data\" first. ${error.message}`, {
+      cause: error
+    });
   }
 
   return gameData;

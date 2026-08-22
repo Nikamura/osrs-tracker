@@ -1,7 +1,7 @@
 {
   "name": "osrs-quest-tracker",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "Static OSRS progress dashboard backed by WikiSync, official hiscores, and OSRS Wiki metadata",
   "main": "data_fetcher.js",
   "type": "module",
   "scripts": {
@@ -9,19 +9,24 @@
     "generate": "node generate_static.js",
     "start": "node server.js",
     "cleanup": "node cleanup_player_data.js",
+    "cleanup:dry-run": "node cleanup_player_data.js --dry-run",
     "cron": "npm run fetch-data && npm run cleanup && npm run generate",
     "fetch-combat-achievements": "node fetch_combat_achievements.js",
     "fetch-collection-log": "node fetch_collection_log.js",
     "fetch-music-tracks": "node fetch_music_tracks.js",
     "fetch-quests": "node fetch_quests.js",
-    "fetch-game-data": "npm run fetch-combat-achievements && npm run fetch-collection-log && npm run fetch-music-tracks && npm run fetch-quests"
+    "fetch-game-data": "npm run fetch-combat-achievements && npm run fetch-collection-log && npm run fetch-music-tracks && npm run fetch-quests",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": "^24.15.0 || >=26.0.0"
+  },
   "dependencies": {
-    "express": "^5.1.0",
-    "helmet": "^8.1.0",
-    "jsdom": "^26.1.0"
+    "express": "5.2.1",
+    "helmet": "8.3.0",
+    "jsdom": "30.0.1"
   }
 }

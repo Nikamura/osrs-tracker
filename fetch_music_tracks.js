@@ -1,79 +1,93 @@
-import { makeAbsoluteUrl, fetchWikiPage, saveGameData } from './fetch_utils.js';
+import {
+  cleanText,
+  makeAbsoluteUrl,
+  fetchWikiPage,
+  isMainModule,
+  saveGameData
+} from './fetch_utils.js';
 
-async function fetchMusicTracks() {
-  try {
-    console.log('Fetching music tracks data...')
-    const document = await fetchWikiPage('https://oldschool.runescape.wiki/w/Music');
+const SOURCE_URL = 'https://oldschool.runescape.wiki/w/Music';
 
-    // Find the track list table by headers
-    const tables = Array.from(document.querySelectorAll('table.wikitable'))
-    const headerMatches = (table) => {
-      const headerRow = table.querySelector('tr')
-      if (!headerRow) return false
-      const headers = Array.from(headerRow.querySelectorAll('th')).map(th => th.textContent.trim().toLowerCase())
-      return headers.includes('name') && headers.some(h => h.includes('unlock')) && headers.includes('members') && headers.includes('duration')
-    }
-
-    const table = tables.find(headerMatches)
-
-    if (!table) {
-      console.error('Music tracks table not found')
-      return
-    }
-
-    console.log('Parsing music tracks table...')
-
-    const rows = Array.from(table.querySelectorAll('tr')).filter(tr => tr.querySelectorAll('td').length >= 5)
-
-    const musicTracks = rows.map(row => {
-      const cells = Array.from(row.querySelectorAll('td'))
-
-      const nameCell = cells[0]
-      const unlockCell = cells[1]
-      const membersCell = cells[2]
-      const durationCell = cells[3]
-      const trackCell = cells[4]
-
-      const nameLink = nameCell.querySelector('a')
-      const nameText = nameCell.textContent.trim()
-      const nameWikiLink = nameLink ? makeAbsoluteUrl(nameLink.getAttribute('href')) : null
-      const isExclusive = !!nameCell.querySelector('b')
-      const isHoliday = !!nameCell.querySelector('i')
-
-      const unlockDetails = unlockCell.textContent.trim()
-      const unlockLinks = Array.from(unlockCell.querySelectorAll('a'))
-        .map(a => makeAbsoluteUrl(a.getAttribute('href')))
-        .filter(Boolean)
-
-      const membersText = (membersCell.querySelector('a')?.textContent?.trim() || membersCell.textContent.trim() || '').toLowerCase()
-      const isMembers = membersText.includes('members') || membersText.startsWith('1')
-
-      const duration = durationCell.textContent.trim()
-
-      const trackLink = trackCell.querySelector('a')?.getAttribute('href')
-      const trackOggUrl = makeAbsoluteUrl(trackLink)
-
-      return {
-        name: nameText,
-        nameWikiLink,
-        unlockDetails,
-        unlockLinks,
-        members: isMembers,
-        duration,
-        trackOggUrl,
-        isExclusive,
-        isHoliday
-      }
-    })
-
-    console.log(`Parsed ${musicTracks.length} music tracks`)
-    saveGameData('music_tracks.json', musicTracks)
-    console.log('Sample data:', musicTracks.slice(0, 2))
-
-    return musicTracks
-  } catch (error) {
-    console.error('Error fetching music tracks:', error)
-  }
+function headerIndex(headers, ...names) {
+  return headers.findIndex(header => names.includes(header));
 }
 
-fetchMusicTracks()
+export function parseMusicTracks(document) {
+  const tables = Array.from(document.querySelectorAll('table.wikitable'));
+  const table = tables.find(candidate => {
+    const headers = Array.from(candidate.querySelector('tr')?.querySelectorAll('th') || [])
+      .map(cell => cleanText(cell.textContent).toLowerCase());
+    return headers.includes('name')
+      && headers.some(header => header.startsWith('unlock'))
+      && (headers.includes('length') || headers.includes('duration'))
+      && (headers.includes('p2p') || headers.includes('members'));
+  });
+
+  if (!table) {
+    throw new Error('Music tracks table not found');
+  }
+
+  const headerCells = Array.from(table.querySelector('tr').querySelectorAll('th'));
+  const headers = headerCells.map(cell => cleanText(cell.textContent).toLowerCase());
+  const indexes = {
+    name: headerIndex(headers, 'name'),
+    unlock: headers.findIndex(header => header.startsWith('unlock')),
+    duration: headerIndex(headers, 'length', 'duration'),
+    members: headerIndex(headers, 'p2p', 'members'),
+    release: headerIndex(headers, 'release', 'release date'),
+    track: headerIndex(headers, 'music track', 'track')
+  };
+
+  if (Object.entries(indexes).some(([name, index]) => name !== 'release' && index < 0)) {
+    throw new Error(`Music tracks table has unsupported headers: ${headers.join(', ')}`);
+  }
+
+  const rows = Array.from(table.querySelectorAll('tr')).slice(1);
+  return rows.map(row => {
+    const cells = Array.from(row.querySelectorAll('td'));
+    if (cells.length <= Math.max(...Object.values(indexes))) return null;
+
+    const nameCell = cells[indexes.name];
+    const unlockCell = cells[indexes.unlock];
+    const membersCell = cells[indexes.members];
+    const nameLink = nameCell.querySelector('a');
+    const membersText = cleanText(membersCell.textContent).toLowerCase();
+
+    return {
+      name: cleanText(nameCell.textContent),
+      nameWikiLink: makeAbsoluteUrl(nameLink?.getAttribute('href')),
+      unlockDetails: cleanText(unlockCell.textContent),
+      unlockLinks: Array.from(unlockCell.querySelectorAll('a'))
+        .map(link => makeAbsoluteUrl(link.getAttribute('href')))
+        .filter(Boolean),
+      members: Boolean(membersCell.querySelector('a[title="Members"]')) || membersText.startsWith('1'),
+      duration: cleanText(cells[indexes.duration]?.textContent),
+      releaseDate: indexes.release >= 0 ? cleanText(cells[indexes.release]?.textContent) : null,
+      trackOggUrl: makeAbsoluteUrl(cells[indexes.track]?.querySelector('a')?.getAttribute('href')),
+      isExclusive: Boolean(nameCell.querySelector('b')),
+      isHoliday: Boolean(nameCell.querySelector('i'))
+    };
+  }).filter(track => track?.name);
+}
+
+export async function fetchMusicTracks() {
+  console.log('Fetching music tracks data...');
+  const document = await fetchWikiPage(SOURCE_URL);
+  const musicTracks = parseMusicTracks(document);
+
+  const names = musicTracks.map(track => track.name);
+  if (new Set(names).size !== names.length) {
+    throw new Error('Music tracks data contains duplicate names');
+  }
+
+  console.log(`Parsed ${musicTracks.length} music tracks`);
+  saveGameData('music_tracks.json', musicTracks, { minimumItems: 800 });
+  return musicTracks;
+}
+
+if (isMainModule(import.meta.url)) {
+  fetchMusicTracks().catch(error => {
+    console.error('Error fetching music tracks:', error);
+    process.exitCode = 1;
+  });
+}

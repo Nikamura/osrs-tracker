@@ -16,9 +16,9 @@ A comprehensive tool to track Old School RuneScape (OSRS) progress for a group o
   - Music track unlocks
   - Combat achievements
   - Collection log progress
-  - League tasks
+  - Sailing levels and sea-charting task totals
 - **Data Storage**: Stores timestamped JSON files for historical tracking
-- **Data Cleanup**: Automated removal of duplicate consecutive data snapshots
+- **Data Cleanup**: Removes consecutive per-player snapshots when only timestamps or hiscore ranks changed, while preserving actual progress
 - **Daily Aggregation for Charts**: Time-series graphs (Quests, Total Level, Skill Level, Total XP) now keep only the latest sample per player per day (Europe/Vilnius). This reduces visual noise while preserving daily progress. Tables remain unaggregated.
 
 ### Web Interface
@@ -62,7 +62,8 @@ osrs-quest-tracker/
 ├── cleanup_player_data.js  # Removes duplicate consecutive data files
 ├── game_data/              # Stores static game data
 ├── player_data/            # Directory storing timestamped JSON files per player
-├── public/                 # Generated static files (index.html)
+├── public/                 # Frontend assets and generated dashboard/data
+├── test/                   # Parser, data-normalization, and generation regression tests
 ├── package.json            # Project metadata and npm scripts
 ├── jsconfig.json          # JavaScript language service configuration
 └── README.md              # This documentation
@@ -96,8 +97,8 @@ export const PLAYER_CONFIG = {
 
 ## Requirements
 
-- **Node.js**: v14.x or higher recommended
-- **Dependencies**: Express.js (for web server)
+- **Node.js**: v24.15.0 through v24.x, or v26+
+- **Docker**: optional; the image uses Node 24 and bootstraps missing data automatically
 
 ## Setup and Installation
 
@@ -109,11 +110,16 @@ export const PLAYER_CONFIG = {
 
 2. Install dependencies:
    ```bash
-   npm install
+   npm ci
    ```
 
 3. Configure players:
    Edit the `PLAYER_CONFIG` object in `config.js` to add/remove players and customize their display names and colors.
+
+4. Fetch the required game metadata before the first generation:
+   ```bash
+   npm run fetch-game-data
+   ```
 
 ## Usage
 
@@ -129,10 +135,16 @@ Clean up duplicate data files:
 npm run cleanup
 ```
 
+Preview what cleanup would remove:
+```bash
+npm run cleanup:dry-run
+```
+
 ### Web Interface
 
-1. Generate the static HTML interface:
+1. Fetch player data and generate the static interface:
    ```bash
+   npm run fetch-data
    npm run generate
    ```
 
@@ -149,10 +161,22 @@ npm run cleanup
 - `npm run generate` - Generate static HTML interface
 - `npm start` - Start the web server
 - `npm run cleanup` - Remove duplicate data files
+- `npm run cleanup:dry-run` - Report duplicate files without deleting them
+- `npm run cron` - Fetch players, clean duplicates, and publish a new dashboard generation
+- `npm run fetch-game-data` - Refresh and validate all OSRS Wiki metadata (each file is replaced atomically)
+- `npm test` - Run the regression suite
 - `npm run fetch-combat-achievements` - Fetch latest combat achievements data from the OSRS Wiki
 - `npm run fetch-collection-log` - Fetch latest collection log data from the OSRS Wiki
 - `npm run fetch-music-tracks` - Fetch latest music tracks metadata from the OSRS Wiki
 - `npm run fetch-quests` - Fetch latest quests and miniquests from the OSRS Wiki into a unified list
+
+### Docker
+
+```bash
+docker compose up --build -d
+```
+
+The container validates/refetches game metadata and regenerates the dashboard at startup, bootstraps player data when no snapshots exist, refreshes player data every 15 minutes, and refreshes game metadata daily. Overlapping cron runs are skipped with a lock. `GET /healthz` reports whether a complete dashboard exists and was generated recently.
 
 ## Combat Achievements Feature
 
@@ -181,6 +205,7 @@ The collection log comparison table displays all items that players have obtaine
 ## Data Sources
 
 - **Primary API**: [RuneLite Player Data API](https://sync.runescape.wiki/runelite/player/{username}/STANDARD)
+- **Skills, XP, and activities**: [official OSRS hiscores](https://services.runescape.com/m=hiscore_oldschool/index_lite.json)
 - **Item Icons**: [OSRS Wiki](https://oldschool.runescape.wiki/)
 - **Music Tracks**: [OSRS Wiki Music page](https://oldschool.runescape.wiki/w/Music)
 - **Quests**: [OSRS Wiki Quests/List](https://oldschool.runescape.wiki/w/Quests/List)
@@ -191,11 +216,13 @@ The collection log comparison table displays all items that players have obtaine
   - Music tracks (unlocked/locked boolean)
   - Combat achievements (task IDs array with detailed achievement metadata)
   - Collection log items (item IDs array with detailed item information)
-  - League tasks (count)
+  - Sea-charting task IDs and totals
+
+WikiSync's response timestamp is the tracker request/detection time, not proof of the player's last RuneLite upload. The standard profile does not provide historical League-profile tracking.
 
 ## Player Configuration
 
-Current tracked players (configured in `data_fetcher.js`):
+Current tracked players (configured in `config.js`):
 - clintonhill (Karolis)
 - anime irl (Martynas) 
 - swamp party (Petras)
@@ -203,8 +230,10 @@ Current tracked players (configured in `data_fetcher.js`):
 - serasvasalas (Mangirdas)
 - scarycorpse (Darius)
 - dedspirit (Egle)
+- justlikemoon (Justas)
+- Silainis13 (Silainis)
 
-Display names are mapped in `generate_static.js` for better readability in the interface.
+Display names and player colors are mapped in `config.js`.
 
 ## Technical Details
 
@@ -218,6 +247,10 @@ Display names are mapped in `generate_static.js` for better readability in the i
 ## Changelog
 
 ### Latest Changes
+- **August 2026 maintenance**: Updated live Wiki parsers for wrapped quest headings and the current music-table schema; added validation, honest request identification, retries/timeouts, atomic writes, and failure propagation.
+- **Sailing-era support**: Tracks Sailing dynamically and exposes WikiSync sea-charting totals and recent progress.
+- **Correct collection totals**: Uses the official `Collections Logged` hiscore instead of WikiSync's unreliable raw varp count, and normalizes Prospector recolour IDs.
+- **Safer operations**: Added per-player progress deduplication, cache-version enforcement, bounded first-run chart processing, Docker bootstrap/daily metadata refresh, a health endpoint, CSP, escaped upstream content, dependency updates, and regression tests.
 - Quest comparison table: added sticky totals row and clickable quest names linking to the OSRS Wiki using metadata from `game_data/quests.json`.
 - Achievement diaries table: added sticky totals row.
 - Music tracks comparison: clickable track names using metadata from `game_data/music_tracks.json` and sticky totals row.

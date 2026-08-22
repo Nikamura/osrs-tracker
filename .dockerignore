@@ -1,7 +1,8 @@
 player_data/
 game_data/
 cache/
-public/
+public/index.html
+public/data/
 node_modules/
 .git/
 *.md

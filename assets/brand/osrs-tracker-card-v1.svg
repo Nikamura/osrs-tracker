@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">OSRS Tracker — Group Progress and Sailing</title>
+  <desc id="description">A Windows 98-style dashboard window on a teal desktop, showing player progress and Sailing tools.</desc>
+  <rect width="1200" height="630" fill="#008080"/>
+
+  <!-- Main Windows 98-style frame -->
+  <path fill="#ffffff" d="M58 42h1084v4H62v522h-4z"/>
+  <path fill="#000000" d="M62 564h1080V42h4v530H58v-4h4z"/>
+  <path fill="#dfdfdf" d="M62 46h1080v518H62z"/>
+  <path fill="#808080" d="M62 46h1080v4H66v514h-4z"/>
+  <rect x="70" y="54" width="1064" height="42" fill="#000080"/>
+  <text x="88" y="82" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="700">OSRS Tracker — Progress Dashboard</text>
+
+  <!-- Window controls -->
+  <g transform="translate(1028 62)" shape-rendering="crispEdges">
+    <g>
+      <rect width="28" height="26" fill="#c0c0c0"/>
+      <path fill="#ffffff" d="M0 0h28v2H2v24H0z"/>
+      <path fill="#000000" d="M2 24h26V0h2v28H0v-2h2z"/>
+      <path fill="#000000" d="M7 18h12v2H7z"/>
+    </g>
+    <g transform="translate(36)">
+      <rect width="28" height="26" fill="#c0c0c0"/>
+      <path fill="#ffffff" d="M0 0h28v2H2v24H0z"/>
+      <path fill="#000000" d="M2 24h26V0h2v28H0v-2h2z"/>
+      <path fill="#000000" d="M7 6h14v14H7z"/>
+      <path fill="#c0c0c0" d="M10 9h8v8h-8z"/>
+    </g>
+  </g>
+
+  <rect x="70" y="100" width="1064" height="456" fill="#efefef"/>
+
+  <!-- Brand mark -->
+  <g transform="translate(110 138) scale(1.55)" shape-rendering="crispEdges">
+    <rect width="64" height="64" fill="#008080"/>
+    <path fill="#ffffff" d="M4 4h56v4H8v52H4z"/>
+    <path fill="#000000" d="M8 56h52V4h4v60H4v-4h4z"/>
+    <path fill="#dfdfdf" d="M8 8h48v48H8z"/>
+    <path fill="#808080" d="M8 8h48v4H12v44H8z"/>
+    <path fill="#000080" d="M12 12h40v8H12z"/>
+    <path fill="#ffffff" d="M16 15h18v2H16z"/>
+    <path fill="#202020" d="M31 23h3v24h-3z"/>
+    <path fill="#ffffff" d="M29 24v17H17z"/>
+    <path fill="#d6b34a" d="M36 28v13h13z"/>
+    <path fill="#000080" d="M14 46h36v4H14z"/>
+    <path fill="#4a90b8" d="M14 43h28v3H14z"/>
+    <path fill="#008000" d="M43 42h3v3h3v3h-6z"/>
+  </g>
+
+  <text x="228" y="170" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700">OSRS TRACKER</text>
+  <text x="228" y="207" fill="#303030" font-family="Arial, Helvetica, sans-serif" font-size="23">Group progress, Sailing and collection logs</text>
+  <path d="M110 250H632" stroke="#808080" stroke-width="2"/>
+  <path d="M110 252H632" stroke="#ffffff" stroke-width="2"/>
+
+  <!-- Feature group box -->
+  <rect x="110" y="278" width="522" height="208" fill="#efefef" stroke="#808080" stroke-width="2"/>
+  <path d="M112 280H630V484H112" fill="none" stroke="#ffffff" stroke-width="2"/>
+  <rect x="132" y="267" width="178" height="24" fill="#efefef"/>
+  <text x="143" y="285" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">TRACK THE CREW</text>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-size="18" fill="#101010">
+    <g transform="translate(140 320)">
+      <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+      <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
+      <text x="36" y="18">Quests &amp; levels</text>
+    </g>
+    <g transform="translate(140 370)">
+      <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+      <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
+      <text x="36" y="18">Achievements</text>
+    </g>
+    <g transform="translate(140 420)">
+      <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+      <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
+      <text x="36" y="18">Collection logs</text>
+    </g>
+    <g transform="translate(382 320)">
+      <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+      <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
+      <text x="36" y="18">Sailing</text>
+    </g>
+    <g transform="translate(382 370)">
+      <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+      <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
+      <text x="36" y="18">Sea charting</text>
+    </g>
+    <g transform="translate(382 420)">
+      <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+      <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
+      <text x="36" y="18">History</text>
+    </g>
+  </g>
+
+  <!-- Sailing Progress child window -->
+  <path fill="#ffffff" d="M680 136h410v3H683v314h-3z"/>
+  <path fill="#000000" d="M683 450h407V136h3v320H680v-3h3z"/>
+  <rect x="683" y="139" width="407" height="311" fill="#c0c0c0"/>
+  <rect x="691" y="147" width="391" height="34" fill="#000080"/>
+  <text x="705" y="170" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Sailing Progress</text>
+  <rect x="691" y="189" width="391" height="253" fill="#ffffff"/>
+  <text x="714" y="223" fill="#202020" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">FLEET PROGRESS</text>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#202020">
+    <text x="714" y="266">Sailing levels</text>
+    <rect x="714" y="280" width="340" height="28" fill="#808080"/>
+    <path fill="#ffffff" d="M716 282h336v2H718v22h-2z"/>
+    <rect x="720" y="286" width="254" height="18" fill="#000080"/>
+    <path d="M728 288v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14" stroke="#1084d0" stroke-width="3"/>
+
+    <text x="714" y="342">Captain's log</text>
+    <rect x="714" y="356" width="340" height="28" fill="#808080"/>
+    <path fill="#ffffff" d="M716 358h336v2H718v22h-2z"/>
+    <rect x="720" y="362" width="188" height="18" fill="#008000"/>
+    <path d="M728 364v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14" stroke="#00aa00" stroke-width="3"/>
+  </g>
+
+  <!-- Explorer button -->
+  <g transform="translate(680 474)">
+    <rect width="413" height="58" fill="#c0c0c0"/>
+    <path fill="#ffffff" d="M0 0h413v3H3v55H0z"/>
+    <path fill="#000000" d="M3 55h410V0h3v61H0v-3h3z"/>
+    <rect x="13" y="12" width="387" height="34" fill="#dfdfdf"/>
+    <text x="28" y="35" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700">Sea Charting Explorer</text>
+    <text x="226" y="35" fill="#404040" font-family="Arial, Helvetica, sans-serif" font-size="14">player • area • status</text>
+  </g>
+
+  <!-- Taskbar -->
+  <rect y="590" width="1200" height="40" fill="#c0c0c0"/>
+  <path d="M0 590h1200" stroke="#ffffff" stroke-width="3"/>
+  <g transform="translate(8 597)" shape-rendering="crispEdges">
+    <rect width="168" height="28" fill="#c0c0c0"/>
+    <path fill="#ffffff" d="M0 0h168v2H2v26H0z"/>
+    <path fill="#000000" d="M2 26h166V0h2v30H0v-2h2z"/>
+    <rect x="9" y="7" width="14" height="14" fill="#008080"/>
+    <path fill="#ffffff" d="M11 9h10v2h-8v8h-2z"/>
+    <path fill="#000080" d="M13 11h8v3h-8z"/>
+    <text x="32" y="21" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">OSRS Tracker</text>
+  </g>
+  <g transform="translate(904 597)">
+    <rect width="288" height="28" fill="#c0c0c0"/>
+    <path d="M0 0h288" stroke="#808080" stroke-width="2"/>
+    <path d="M0 0v28" stroke="#808080" stroke-width="2"/>
+    <text x="18" y="20" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="15">osrs-tracker.cn.lt</text>
+  </g>
+</svg>

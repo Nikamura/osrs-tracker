@@ -4,5 +4,16 @@ public/*
 !public/styles.css
 !public/js/
 !public/js/**
+!public/favicon.ico
+!public/favicon.svg
+!public/favicon-48x48.png
+!public/apple-touch-icon.png
+!public/site.webmanifest
+!public/robots.txt
+!public/sitemap.xml
+!public/icons/
+!public/icons/**
+!public/og/
+!public/og/**
 game_data/
 cache/

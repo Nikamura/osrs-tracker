@@ -9,12 +9,24 @@ export const REQUIRED_DASHBOARD_FILES = [
   'styles.css',
   'js/app.js',
   'js/init.js',
+  'favicon.ico',
+  'favicon.svg',
+  'favicon-48x48.png',
+  'apple-touch-icon.png',
+  'icons/icon-192.png',
+  'icons/icon-512.png',
+  'og/osrs-tracker-card-v1.png',
+  'site.webmanifest',
+  'robots.txt',
+  'sitemap.xml',
   'data/chart-data.json',
   'data/player-config.json',
   'data/table-data.json'
 ];
 
-const REQUIRED_JSON_FILES = REQUIRED_DASHBOARD_FILES.filter(filename => filename.endsWith('.json'));
+const REQUIRED_JSON_FILES = REQUIRED_DASHBOARD_FILES.filter(filename =>
+  filename.endsWith('.json') || filename.endsWith('.webmanifest')
+);
 
 function getFileProblems(publicDirectory) {
   const problems = [];
@@ -75,6 +87,7 @@ export function createApp({
   }));
 
   app.get('/healthz', (request, response) => {
+    response.set('X-Robots-Tag', 'noindex, nofollow');
     const fileProblems = getFileProblems(publicDirectory);
     if (fileProblems.length > 0) {
       return response.status(503).json({ status: 'not-ready', fileProblems });
@@ -91,6 +104,13 @@ export function createApp({
     }
 
     return response.json({ status: 'ok', generatedAt: generatedAt.toISOString() });
+  });
+
+  app.get('/index.html', (request, response) => response.redirect(308, '/'));
+
+  app.use('/data', (request, response, next) => {
+    response.set('X-Robots-Tag', 'noindex, nofollow');
+    next();
   });
 
   app.use(express.static(publicDirectory, {

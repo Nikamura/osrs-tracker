@@ -16,6 +16,27 @@ import {
   loadGameData
 } from "./cache.js";
 
+export const SITE_METADATA = Object.freeze({
+  name: 'OSRS Tracker',
+  title: 'OSRS Tracker — Group Progress, Sailing & Collection Logs',
+  description: 'Compare Old School RuneScape group progress across skills, quests, collection logs, combat achievements and Sailing sea charting.',
+  canonicalUrl: 'https://osrs-tracker.cn.lt/',
+  locale: 'en_GB',
+  socialImageUrl: 'https://osrs-tracker.cn.lt/og/osrs-tracker-card-v1.png',
+  socialImageAlt: 'A Windows 98-style OSRS Tracker dashboard with player progress and Sailing windows.'
+});
+
+const SITE_STRUCTURED_DATA = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': `${SITE_METADATA.canonicalUrl}#website`,
+  url: SITE_METADATA.canonicalUrl,
+  name: SITE_METADATA.name,
+  alternateName: 'OSRS Group Tracker',
+  description: SITE_METADATA.description,
+  inLanguage: 'en'
+});
+
 // Parse command line flags
 const USE_CACHE = !process.argv.includes('--no-cache');
 if (!USE_CACHE) {
@@ -1209,12 +1230,42 @@ export async function generateStaticHTML() {
     }));
 
     const htmlContent = `<!DOCTYPE html>
-<html>
+<html lang="en" prefix="og: https://ogp.me/ns#">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>${escapeHtml(SITE_METADATA.title)}</title>
+  <meta name="description" content="${escapeHtml(SITE_METADATA.description)}">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="theme-color" content="#008080">
-  <title>OSRS Tracker</title>
+  <meta name="application-name" content="${escapeHtml(SITE_METADATA.name)}">
+  <meta name="apple-mobile-web-app-title" content="${escapeHtml(SITE_METADATA.name)}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="canonical" href="${SITE_METADATA.canonicalUrl}">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon-48x48.png" type="image/png" sizes="48x48">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="${escapeHtml(SITE_METADATA.title)}">
+  <meta property="og:description" content="${escapeHtml(SITE_METADATA.description)}">
+  <meta property="og:url" content="${SITE_METADATA.canonicalUrl}">
+  <meta property="og:site_name" content="${escapeHtml(SITE_METADATA.name)}">
+  <meta property="og:locale" content="${SITE_METADATA.locale}">
+  <meta property="og:image" content="${SITE_METADATA.socialImageUrl}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="${escapeHtml(SITE_METADATA.socialImageAlt)}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${escapeHtml(SITE_METADATA.title)}">
+  <meta name="twitter:description" content="${escapeHtml(SITE_METADATA.description)}">
+  <meta name="twitter:image" content="${SITE_METADATA.socialImageUrl}">
+  <meta name="twitter:image:alt" content="${escapeHtml(SITE_METADATA.socialImageAlt)}">
+  <script type="application/ld+json">${SITE_STRUCTURED_DATA}</script>
   <link rel="stylesheet" href="https://unpkg.com/98.css@0.1.21/dist/98.css">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
@@ -1232,8 +1283,8 @@ export async function generateStaticHTML() {
     </div>
   </div>
 
-  <div class="generated-at">Generated: ${generatedAt}</div>
-  <div class="container">
+  <div class="generated-at" data-nosnippet>Generated: ${generatedAt}</div>
+  <main class="container">
     <div class="window main-window configuration-window">
       <div class="title-bar">
         <div class="title-bar-text">Configuration</div>
@@ -1242,6 +1293,14 @@ export async function generateStaticHTML() {
         </div>
       </div>
       <div class="window-body">
+        <header class="site-intro">
+          <img class="site-intro-icon" src="/favicon.svg" width="48" height="48" alt="">
+          <div class="site-intro-copy">
+            <h1>OSRS Tracker</h1>
+            <p>Compare the crew across quests, levels, achievements, collection logs and Sailing.</p>
+          </div>
+        </header>
+        <p class="site-attribution">Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex. <a href="https://legal.jagex.com/docs/policies/fan-content-policy" target="_blank" rel="noopener noreferrer">Read the policy</a>.</p>
         ${playerSelectionHtml}
         ${windowVisibilityHtml}
       </div>
@@ -1445,7 +1504,7 @@ export async function generateStaticHTML() {
         <div id="achievements-table-container"></div>
       </div>
     </div>
-  </div>
+  </main>
   <script src="js/init.js"></script>
   <script src="js/app.js"></script>
 </body>

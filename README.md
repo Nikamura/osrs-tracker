@@ -23,6 +23,8 @@ A comprehensive tool to track Old School RuneScape (OSRS) progress for a group o
 
 ### Web Interface
 - **Interactive Dashboard**: Windows 98-style UI with draggable, minimizable, and closable windows
+- **Sharing and Search Metadata**: Branded Open Graph/X cards, canonical metadata, crawler directives, sitemap, favicon, app icons, and `WebSite` structured data
+- **Home-Screen Support**: Web app manifest and touch icons preserve the tracker identity when saved to a phone
 - **Loading Screen**: Smooth loading experience with spinner animation that prevents content flashing
 - **Configuration Window**: Centralized control panel for:
   - Player selection/deselection with visual indicators
@@ -67,6 +69,8 @@ osrs-quest-tracker/
 ├── game_data/              # Stores static game data
 ├── player_data/            # Directory storing timestamped JSON files per player
 ├── public/                 # Frontend assets and generated dashboard/data
+├── assets/brand/           # Editable SVG source for the versioned social card
+├── scripts/render_brand_assets.sh # Renders favicon, app icons, and social card
 ├── test/                   # Parser, data-normalization, and generation regression tests
 ├── package.json            # Project metadata and npm scripts
 ├── jsconfig.json          # JavaScript language service configuration
@@ -103,6 +107,7 @@ export const PLAYER_CONFIG = {
 
 - **Node.js**: v24.15.0 through v24.x, or v26+
 - **Docker**: optional; the image uses Node 24 and bootstraps missing data automatically
+- **ImageMagick 7**: optional; only required when regenerating the committed brand images
 
 ## Setup and Installation
 
@@ -168,6 +173,7 @@ npm run cleanup:dry-run
 - `npm run cleanup:dry-run` - Report duplicate files without deleting them
 - `npm run cron` - Fetch players, clean duplicates, and publish a new dashboard generation
 - `npm run fetch-game-data` - Refresh and validate all OSRS Wiki metadata (each file is replaced atomically)
+- `npm run assets:brand` - Render the favicon, app icons, and 1200×630 social card from their SVG sources
 - `npm test` - Run the regression suite
 - `npm run fetch-combat-achievements` - Fetch latest combat achievements data from the OSRS Wiki
 - `npm run fetch-collection-log` - Fetch latest collection log data from the OSRS Wiki
@@ -181,7 +187,7 @@ npm run cleanup:dry-run
 docker compose up --build -d
 ```
 
-The container validates/refetches game metadata and regenerates the dashboard at startup, bootstraps player data when no snapshots exist, refreshes player data every 15 minutes, and refreshes game metadata daily. Overlapping cron runs are skipped with a lock. `GET /healthz` reports whether a complete dashboard exists and was generated recently.
+The container validates/refetches game metadata and regenerates the dashboard at startup, bootstraps player data when no snapshots exist, refreshes player data every 15 minutes, and refreshes game metadata daily. Overlapping cron runs are skipped with a lock. `GET /healthz` reports whether a complete dashboard—including its sharing, icon, manifest, and crawler assets—exists and was generated recently.
 
 ## Combat Achievements Feature
 

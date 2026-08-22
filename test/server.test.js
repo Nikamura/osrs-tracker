@@ -20,7 +20,9 @@ function writeDashboardFiles(publicDirectory, { empty = false } = {}) {
   for (const filename of REQUIRED_DASHBOARD_FILES) {
     const filePath = path.join(publicDirectory, filename);
     mkdirSync(path.dirname(filePath), { recursive: true });
-    const contents = empty ? '' : (filename.endsWith('.json') ? '{}' : 'ok');
+    const contents = empty
+      ? ''
+      : (filename.endsWith('.json') || filename.endsWith('.webmanifest') ? '{}' : 'ok');
     writeFileSync(filePath, contents);
   }
 }
@@ -91,6 +93,49 @@ test('bind failures never log a successful server start', async () => {
     assert.equal(errors.length, 1);
   } finally {
     await closeServer(occupiedServer);
+    rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test('serves crawler assets, redirects the duplicate index URL, and keeps data endpoints out of results', async () => {
+  const temporaryDirectory = mkdtempSync(path.join(os.tmpdir(), 'osrs-seo-server-test-'));
+  const publicDirectory = path.join(temporaryDirectory, 'public');
+  writeDashboardFiles(publicDirectory);
+
+  const server = createApp({ publicDirectory }).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const port = server.address().port;
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const indexResponse = await fetch(`${baseUrl}/index.html`, { redirect: 'manual' });
+    assert.equal(indexResponse.status, 308);
+    assert.equal(indexResponse.headers.get('location'), '/');
+
+    const expectedContentTypes = new Map([
+      ['/favicon.svg', 'image/svg+xml'],
+      ['/favicon.ico', 'image/vnd.microsoft.icon'],
+      ['/apple-touch-icon.png', 'image/png'],
+      ['/og/osrs-tracker-card-v1.png', 'image/png'],
+      ['/site.webmanifest', 'application/manifest+json'],
+      ['/robots.txt', 'text/plain'],
+      ['/sitemap.xml', 'application/xml']
+    ]);
+    for (const [pathname, contentType] of expectedContentTypes) {
+      const response = await fetch(`${baseUrl}${pathname}`);
+      assert.equal(response.status, 200, pathname);
+      assert.match(response.headers.get('content-type') || '', new RegExp(`^${contentType.replace('+', '\\+')}`));
+    }
+
+    const dataResponse = await fetch(`${baseUrl}/data/table-data.json`);
+    assert.equal(dataResponse.status, 200);
+    assert.equal(dataResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+
+    const healthResponse = await fetch(`${baseUrl}/healthz`);
+    assert.equal(healthResponse.status, 200);
+    assert.equal(healthResponse.headers.get('x-robots-tag'), 'noindex, nofollow');
+  } finally {
+    await closeServer(server);
     rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 });

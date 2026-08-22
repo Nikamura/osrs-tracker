@@ -17,6 +17,7 @@
     "fetch-music-tracks": "node fetch_music_tracks.js",
     "fetch-quests": "node fetch_quests.js",
     "fetch-game-data": "npm run fetch-combat-achievements && npm run fetch-collection-log && npm run fetch-sea-charting && npm run fetch-music-tracks && npm run fetch-quests",
+    "assets:brand": "./scripts/render_brand_assets.sh",
     "test": "node --test"
   },
   "keywords": [],

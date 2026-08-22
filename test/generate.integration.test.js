@@ -13,7 +13,8 @@ import { JSDOM } from 'jsdom';
 import {
   generateStaticHTML,
   getPlayerOverviewData,
-  getSailingProgressData
+  getSailingProgressData,
+  SITE_METADATA
 } from '../generate_static.js';
 
 function writeJson(filePath, data) {
@@ -149,6 +150,52 @@ test('fresh generation works and includes Sailing-era progress', async () => {
     assert.match(emptyDashboardHtml, /chart-frame/);
 
     const emptyDashboardDocument = new JSDOM(emptyDashboardHtml).window.document;
+    assert.equal(emptyDashboardDocument.documentElement.lang, 'en');
+    assert.equal(emptyDashboardDocument.title, SITE_METADATA.title);
+    assert.equal(
+      emptyDashboardDocument.querySelector('meta[name="description"]')?.content,
+      SITE_METADATA.description
+    );
+    assert.equal(
+      emptyDashboardDocument.querySelector('link[rel="canonical"]')?.href,
+      SITE_METADATA.canonicalUrl
+    );
+    assert.equal(
+      emptyDashboardDocument.querySelector('meta[property="og:image"]')?.content,
+      SITE_METADATA.socialImageUrl
+    );
+    assert.equal(
+      emptyDashboardDocument.querySelector('meta[property="og:image:alt"]')?.content,
+      SITE_METADATA.socialImageAlt
+    );
+    assert.equal(
+      emptyDashboardDocument.querySelector('meta[name="twitter:card"]')?.content,
+      'summary_large_image'
+    );
+    assert.equal(
+      emptyDashboardDocument.querySelector('meta[name="twitter:image"]')?.content,
+      SITE_METADATA.socialImageUrl
+    );
+    assert.equal(
+      emptyDashboardDocument.querySelector('meta[name="robots"]')?.content,
+      'index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1'
+    );
+    assert.equal(emptyDashboardDocument.querySelector('link[rel="manifest"]')?.href, '/site.webmanifest');
+    assert.equal(emptyDashboardDocument.querySelector('link[rel="apple-touch-icon"]')?.href, '/apple-touch-icon.png');
+    assert.ok(emptyDashboardDocument.querySelector('link[rel="icon"][href="/favicon.svg"]'));
+    assert.equal(emptyDashboardDocument.querySelector('h1')?.textContent, SITE_METADATA.name);
+    assert.ok(emptyDashboardDocument.querySelector('main.container'));
+    assert.match(
+      emptyDashboardDocument.querySelector('.site-attribution')?.textContent || '',
+      /This content is not endorsed by or affiliated with Jagex\./
+    );
+    assert.equal(emptyDashboardDocument.querySelector('meta[name="keywords"]'), null);
+    const structuredData = JSON.parse(
+      emptyDashboardDocument.querySelector('script[type="application/ld+json"]')?.textContent || '{}'
+    );
+    assert.equal(structuredData['@type'], 'WebSite');
+    assert.equal(structuredData.url, SITE_METADATA.canonicalUrl);
+    assert.equal(structuredData.name, SITE_METADATA.name);
     assert.equal(emptyDashboardDocument.body.dataset.windowCatalogVersion, '2');
     for (const windowId of ['player-overview', 'sailing-progress', 'sea-charting-explorer']) {
       const checkbox = emptyDashboardDocument.querySelector(`#window-${windowId}`);

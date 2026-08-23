@@ -40,7 +40,7 @@ npm test
 
 ### Data Flow
 1. `data_fetcher.js` fetches and validates a complete batch from WikiSync and official OSRS hiscores before atomically saving timestamped snapshots
-2. `cleanup_player_data.js` removes per-player consecutive snapshots when tracked progress is unchanged (timestamp and rank churn are ignored)
+2. `cleanup_player_data.js` compresses per-player unchanged runs while retaining their first and newest snapshots, so inactive players keep a current chart endpoint (timestamp and rank churn are ignored)
 3. `generate_static.js` validates game metadata, incrementally reads player snapshots, and atomically generates `public/index.html` plus JSON data files
 
 ### Key Files

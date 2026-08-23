@@ -65,7 +65,7 @@ osrs-quest-tracker/
 ├── fetch_sea_charting.js # Fetches and validates sea-charting task metadata
 ├── generate_static.js      # Generates static HTML with all data and features
 ├── server.js               # Express server to serve the web interface
-├── cleanup_player_data.js  # Removes duplicate consecutive data files
+├── cleanup_player_data.js  # Compresses unchanged runs while retaining chart endpoints
 ├── game_data/              # Stores static game data
 ├── player_data/            # Directory storing timestamped JSON files per player
 ├── public/                 # Frontend assets and generated dashboard/data
@@ -169,7 +169,7 @@ npm run cleanup:dry-run
 - `npm run fetch-data` - Fetch latest player data
 - `npm run generate` - Generate static HTML interface
 - `npm start` - Start the web server
-- `npm run cleanup` - Remove duplicate data files
+- `npm run cleanup` - Remove intermediate duplicate snapshots while retaining the newest endpoint
 - `npm run cleanup:dry-run` - Report duplicate files without deleting them
 - `npm run cron` - Fetch players, clean duplicates, and publish a new dashboard generation
 - `npm run fetch-game-data` - Refresh and validate all OSRS Wiki metadata (each file is replaced atomically)

@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizePlayerProgress } from '../cleanup_player_data.js';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { cleanupPlayerData, normalizePlayerProgress } from '../cleanup_player_data.js';
 import { validateHighscoreData, validateWikiSyncData } from '../data_fetcher.js';
 import {
   normalizeCollectionLogItems,
@@ -76,6 +85,42 @@ test('snapshot comparison ignores rank churn but preserves score and XP changes'
     activities: [{ ...rankOnlyChange.activities[0], score: 3 }]
   };
   assert.notDeepEqual(normalizePlayerProgress(first), normalizePlayerProgress(progressChange));
+});
+
+test('cleanup compresses unchanged runs while retaining their newest chart endpoint', () => {
+  const playerDataDir = mkdtempSync(path.join(os.tmpdir(), 'osrs-cleanup-test-'));
+  const playerDirectory = path.join(playerDataDir, 'inactive-player');
+  mkdirSync(playerDirectory);
+
+  const writeSnapshot = timestamp => {
+    const filename = `inactive-player_${timestamp}.json`;
+    writeFileSync(path.join(playerDirectory, filename), JSON.stringify({
+      timestamp,
+      skills: [{ name: 'Overall', rank: 100, level: 100, xp: 1_000_000 }]
+    }));
+    return filename;
+  };
+
+  try {
+    const timestamps = [
+      '2026-08-19T12:00:00.000Z',
+      '2026-08-20T12:00:00.000Z',
+      '2026-08-21T12:00:00.000Z',
+      '2026-08-22T12:00:00.000Z'
+    ];
+    const filenames = timestamps.map(writeSnapshot);
+
+    const firstCleanup = cleanupPlayerData({ playerDataDir });
+    assert.equal(firstCleanup.deletedCount, 2);
+    assert.deepEqual(readdirSync(playerDirectory).sort(), [filenames[0], filenames[3]]);
+
+    const newestFilename = writeSnapshot('2026-08-23T12:00:00.000Z');
+    const secondCleanup = cleanupPlayerData({ playerDataDir });
+    assert.equal(secondCleanup.deletedCount, 1);
+    assert.deepEqual(readdirSync(playerDirectory).sort(), [filenames[0], newestFilename]);
+  } finally {
+    rmSync(playerDataDir, { recursive: true, force: true });
+  }
 });
 
 test('live payload validators reject incomplete responses', () => {

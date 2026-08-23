@@ -67,16 +67,16 @@ function loadProgress(filePath) {
   }
 }
 
-function getPlayerDirectories() {
-  if (!existsSync(PLAYER_DATA_DIR)) return [];
-  return readdirSync(PLAYER_DATA_DIR, { withFileTypes: true })
+function getPlayerDirectories(playerDataDir = PLAYER_DATA_DIR) {
+  if (!existsSync(playerDataDir)) return [];
+  return readdirSync(playerDataDir, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
     .map(entry => entry.name)
     .sort();
 }
 
-function getPlayerFiles(playerName) {
-  const playerDirectory = path.join(PLAYER_DATA_DIR, playerName);
+function getPlayerFiles(playerName, playerDataDir = PLAYER_DATA_DIR) {
+  const playerDirectory = path.join(playerDataDir, playerName);
   return readdirSync(playerDirectory)
     .filter(filename => filename.endsWith('.json'))
     .map(filename => ({
@@ -88,37 +88,53 @@ function getPlayerFiles(playerName) {
     .sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
 }
 
-export function findDuplicateSnapshots() {
+export function findDuplicateSnapshots({ playerDataDir = PLAYER_DATA_DIR } = {}) {
   const duplicates = [];
 
-  for (const player of getPlayerDirectories()) {
-    let previousProgress = null;
-    for (const file of getPlayerFiles(player)) {
+  for (const player of getPlayerDirectories(playerDataDir)) {
+    let currentRun = [];
+    let currentProgress = null;
+
+    const finishRun = () => {
+      // The first point records when this state began, while the last point
+      // keeps an unchanged player's chart current. Only the middle is redundant.
+      if (currentRun.length > 2) {
+        duplicates.push(...currentRun.slice(1, -1).map(file => ({ player, ...file })));
+      }
+      currentRun = [];
+      currentProgress = null;
+    };
+
+    for (const file of getPlayerFiles(player, playerDataDir)) {
       const progress = loadProgress(file.filePath);
       if (progress === null) {
-        previousProgress = null;
+        finishRun();
         continue;
       }
 
-      if (previousProgress === progress) {
-        duplicates.push({ player, ...file });
+      if (currentProgress === progress) {
+        currentRun.push(file);
       } else {
-        previousProgress = progress;
+        finishRun();
+        currentRun = [file];
+        currentProgress = progress;
       }
     }
+
+    finishRun();
   }
 
   return duplicates;
 }
 
-export function cleanupPlayerData({ dryRun = false } = {}) {
-  const players = getPlayerDirectories();
+export function cleanupPlayerData({ dryRun = false, playerDataDir = PLAYER_DATA_DIR } = {}) {
+  const players = getPlayerDirectories(playerDataDir);
   if (players.length === 0) {
     console.log('No player snapshots found. Nothing to clean up.');
     return { deletedCount: 0, duplicateCount: 0 };
   }
 
-  const duplicates = findDuplicateSnapshots();
+  const duplicates = findDuplicateSnapshots({ playerDataDir });
   if (duplicates.length === 0) {
     console.log('No consecutive duplicate player snapshots found.');
     return { deletedCount: 0, duplicateCount: 0 };

@@ -13,6 +13,9 @@ let sailingExplorerPlayer = null;
 let sailingExplorerStatus = 'missing';
 let sailingExplorerGroup = 'all';
 
+const GENERAL_TRACKER_REBALANCE_VERSION = 3;
+const SAILING_WINDOW_IDS = new Set(['sailing-progress', 'sea-charting-explorer']);
+
 // Create player mapping objects from config
 let displayToPlayer = {};
 let playerToDisplay = {};
@@ -396,15 +399,19 @@ function loadWindowVisibility() {
   const seenCatalogVersion = readWindowCatalogVersion();
   const selectedWindows = readStoredStringArray('osrs-selected-windows');
   if (selectedWindows) {
+    const shouldRebalance = seenCatalogVersion < GENERAL_TRACKER_REBALANCE_VERSION
+      && currentCatalogVersion >= GENERAL_TRACKER_REBALANCE_VERSION;
     const checkboxes = document.querySelectorAll('input[type="checkbox"][id^="window-"]');
     checkboxes.forEach(cb => {
       const introducedVersion = Number(cb.dataset.introducedVersion || 1);
-      cb.checked = selectedWindows.includes(cb.value) || introducedVersion > seenCatalogVersion;
+      cb.checked = shouldRebalance && SAILING_WINDOW_IDS.has(cb.value)
+        ? false
+        : selectedWindows.includes(cb.value) || introducedVersion > seenCatalogVersion;
     });
     updateWindowVisibility();
   } else {
-    // If no saved state, just update visual indicators for initial state
-    updateWindowVisualIndicators();
+    // Apply and persist the generated defaults on a first visit.
+    updateWindowVisibility();
   }
   localStorage.setItem('osrs-window-catalog-version', String(currentCatalogVersion));
 }
@@ -954,13 +961,19 @@ function loadWindowOrder() {
   });
 
   const seenCatalogVersion = readWindowCatalogVersion();
+  const configuredCatalogVersion = Number(document.body.dataset.windowCatalogVersion);
+  const currentCatalogVersion = Number.isInteger(configuredCatalogVersion) && configuredCatalogVersion >= 1
+    ? configuredCatalogVersion
+    : 1;
+  const shouldRebalance = seenCatalogVersion < GENERAL_TRACKER_REBALANCE_VERSION
+    && currentCatalogVersion >= GENERAL_TRACKER_REBALANCE_VERSION;
   const introducedWindows = windows.filter(windowElement => {
     const windowId = getWindowId(windowElement);
     const introducedVersion = Number(windowElement.dataset.introducedVersion || 1);
     return !savedOrder.includes(windowId) && introducedVersion > seenCatalogVersion;
   });
   const introducedWindowIds = new Set(introducedWindows.map(getWindowId));
-  const orderedWindows = savedOrder.map(windowId => windowMap[windowId]).filter(Boolean);
+  let orderedWindows = savedOrder.map(windowId => windowMap[windowId]).filter(Boolean);
 
   for (const windowElement of windows) {
     const windowId = getWindowId(windowElement);
@@ -971,11 +984,16 @@ function loadWindowOrder() {
 
   const configurationIndex = orderedWindows.findIndex(windowElement => getWindowId(windowElement) === 'configuration');
   orderedWindows.splice(configurationIndex >= 0 ? configurationIndex + 1 : 0, 0, ...introducedWindows);
+  if (shouldRebalance) {
+    const sailingWindows = orderedWindows.filter(windowElement => SAILING_WINDOW_IDS.has(getWindowId(windowElement)));
+    orderedWindows = orderedWindows
+      .filter(windowElement => !SAILING_WINDOW_IDS.has(getWindowId(windowElement)))
+      .concat(sailingWindows);
+  }
   orderedWindows.forEach(windowElement => container.appendChild(windowElement));
 
-  // Persist the migrated order so the new windows remain near Configuration
-  // after the catalog version is marked as seen.
-  if (introducedWindows.length > 0) saveWindowOrder();
+  // Persist catalog migrations before the version is marked as seen.
+  if (introducedWindows.length > 0 || shouldRebalance) saveWindowOrder();
 }
 
 // Save window order to localStorage
@@ -2064,9 +2082,9 @@ function renderPlayerOverview(selectedPlayers = getSelectedPlayers()) {
       ['Total level', formatOverviewNumber(stats.totalLevel)],
       ['Total XP', formatOverviewNumber(stats.totalExperience, { compact: true })],
       ['Quests', `${formatOverviewNumber(stats.completedQuests)}/${formatOverviewNumber(data.totals.quests)}`],
+      ['Level 99s', formatOverviewNumber(stats.maxedSkills)],
       ['Collection log', formatOverviewNumber(stats.collectionLog)],
-      ['Combat tasks', `${formatOverviewNumber(stats.combatAchievements)}/${formatOverviewNumber(data.totals.combatAchievements)}`],
-      ['Sailing', stats.sailingLevel === null ? '\u2014' : `Level ${formatOverviewNumber(stats.sailingLevel)}`]
+      ['Combat tasks', `${formatOverviewNumber(stats.combatAchievements)}/${formatOverviewNumber(data.totals.combatAchievements)}`]
     ];
     const metricHtml = metrics.map(([label, value]) => `
       <div class="overview-metric">

@@ -46,9 +46,11 @@ test('new summary windows use mobile cards and preserve native disclosure contro
   assert.match(styles, /\.overview-grid,[\s\S]*?\.sailing-explorer-controls\s*{\s*grid-template-columns:\s*1fr/s);
 });
 
-test('returning users see windows introduced after their saved visibility catalog', () => {
-  assert.match(generator, /data-window-catalog-version="2"/);
+test('returning users receive the versioned general-tracker window rebalance', () => {
+  assert.match(generator, /data-window-catalog-version="3"/);
   assert.match(generator, /data-introduced-version="\$\{window\.introducedVersion \|\| 1\}"/);
   assert.match(app, /introducedVersion\s*>\s*seenCatalogVersion/);
+  assert.match(app, /GENERAL_TRACKER_REBALANCE_VERSION = 3/);
+  assert.match(app, /SAILING_WINDOW_IDS = new Set/);
   assert.match(init, /introducedVersion\s*<=\s*seenCatalogVersion/);
 });

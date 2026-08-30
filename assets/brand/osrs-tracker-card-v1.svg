@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
-  <title id="title">OSRS Tracker — Group Progress and Sailing</title>
-  <desc id="description">A Windows 98-style dashboard window on a teal desktop, showing player progress and Sailing tools.</desc>
+  <title id="title">OSRS Tracker — Group Progress Dashboard</title>
+  <desc id="description">A Windows 98-style dashboard window on a teal desktop, comparing group progress across Gielinor.</desc>
   <rect width="1200" height="630" fill="#008080"/>
 
   <!-- Main Windows 98-style frame -->
@@ -48,7 +48,7 @@
   </g>
 
   <text x="228" y="170" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="700">OSRS TRACKER</text>
-  <text x="228" y="207" fill="#303030" font-family="Arial, Helvetica, sans-serif" font-size="23">Group progress, Sailing and collection logs</text>
+  <text x="228" y="207" fill="#303030" font-family="Arial, Helvetica, sans-serif" font-size="23">Group progress across Gielinor</text>
   <path d="M110 250H632" stroke="#808080" stroke-width="2"/>
   <path d="M110 252H632" stroke="#ffffff" stroke-width="2"/>
 
@@ -62,66 +62,66 @@
     <g transform="translate(140 320)">
       <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
       <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
-      <text x="36" y="18">Quests &amp; levels</text>
+      <text x="36" y="18">Skills &amp; XP</text>
     </g>
     <g transform="translate(140 370)">
       <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
       <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
-      <text x="36" y="18">Achievements</text>
+      <text x="36" y="18">Quests</text>
     </g>
     <g transform="translate(140 420)">
       <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
       <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
-      <text x="36" y="18">Collection logs</text>
+      <text x="36" y="18">Achievement diaries</text>
     </g>
     <g transform="translate(382 320)">
       <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
       <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
-      <text x="36" y="18">Sailing</text>
+      <text x="36" y="18">Combat tasks</text>
     </g>
     <g transform="translate(382 370)">
       <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
       <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
-      <text x="36" y="18">Sea charting</text>
+      <text x="36" y="18">Collection logs</text>
     </g>
     <g transform="translate(382 420)">
       <rect width="22" height="22" fill="#ffffff" stroke="#808080" stroke-width="2"/>
       <path d="M4 11l5 5L18 5v5l-9 10-5-5z" fill="#008000"/>
-      <text x="36" y="18">History</text>
+      <text x="36" y="18">Bosses &amp; activities</text>
     </g>
   </g>
 
-  <!-- Sailing Progress child window -->
+  <!-- Player Overview child window -->
   <path fill="#ffffff" d="M680 136h410v3H683v314h-3z"/>
   <path fill="#000000" d="M683 450h407V136h3v320H680v-3h3z"/>
   <rect x="683" y="139" width="407" height="311" fill="#c0c0c0"/>
   <rect x="691" y="147" width="391" height="34" fill="#000080"/>
-  <text x="705" y="170" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Sailing Progress</text>
+  <text x="705" y="170" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Player Overview</text>
   <rect x="691" y="189" width="391" height="253" fill="#ffffff"/>
-  <text x="714" y="223" fill="#202020" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">FLEET PROGRESS</text>
+  <text x="714" y="223" fill="#202020" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">ACCOUNT PROGRESS</text>
 
   <g font-family="Arial, Helvetica, sans-serif" font-size="16" fill="#202020">
-    <text x="714" y="266">Sailing levels</text>
+    <text x="714" y="266">Total level</text>
     <rect x="714" y="280" width="340" height="28" fill="#808080"/>
     <path fill="#ffffff" d="M716 282h336v2H718v22h-2z"/>
     <rect x="720" y="286" width="254" height="18" fill="#000080"/>
     <path d="M728 288v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14" stroke="#1084d0" stroke-width="3"/>
 
-    <text x="714" y="342">Captain's log</text>
+    <text x="714" y="342">Total XP</text>
     <rect x="714" y="356" width="340" height="28" fill="#808080"/>
     <path fill="#ffffff" d="M716 358h336v2H718v22h-2z"/>
     <rect x="720" y="362" width="188" height="18" fill="#008000"/>
     <path d="M728 364v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14m8-14v14" stroke="#00aa00" stroke-width="3"/>
   </g>
 
-  <!-- Explorer button -->
+  <!-- Recent progress button -->
   <g transform="translate(680 474)">
     <rect width="413" height="58" fill="#c0c0c0"/>
     <path fill="#ffffff" d="M0 0h413v3H3v55H0z"/>
     <path fill="#000000" d="M3 55h410V0h3v61H0v-3h3z"/>
     <rect x="13" y="12" width="387" height="34" fill="#dfdfdf"/>
-    <text x="28" y="35" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700">Sea Charting Explorer</text>
-    <text x="226" y="35" fill="#404040" font-family="Arial, Helvetica, sans-serif" font-size="14">player • area • status</text>
+    <text x="28" y="35" fill="#101010" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700">Recent Achievements</text>
+    <text x="226" y="35" fill="#404040" font-family="Arial, Helvetica, sans-serif" font-size="14">levels • drops • quests</text>
   </g>
 
   <!-- Taskbar -->

@@ -33,9 +33,7 @@ A comprehensive tool to track Old School RuneScape (OSRS) progress for a group o
 - **Window Controls**: Each window (except Configuration) features:
   - Minimize button to collapse/expand the window content
   - Close button to hide the window (can be reopened via Configuration panel)
-- **Player Overview**: Compact per-player cards for total level, total XP, quests, collection log, combat achievements, Sailing level, and snapshot time
-- **Sailing Progress**: Lightweight per-player Sailing and Captain's log progress bars
-- **Sea Charting Explorer**: A separate, independently closable window for detailed chart tasks, seas, oceans, and filters
+- **Player Overview**: Compact per-player cards for total level, total XP, quests, level 99s, collection log, combat achievements, and snapshot time
 - **Progress Charts**: Line charts showing progression over time:
   - Quest completion progress
   - Total level progression
@@ -50,6 +48,7 @@ A comprehensive tool to track Old School RuneScape (OSRS) progress for a group o
   - Quest names now link to OSRS Wiki pages; music tracks link to their Wiki pages too
   - Collection log progress with item icons and completion percentages
 - **Recent Achievements**: Timeline of recent progress with player-specific colors, including individual collection log items with icons
+- **Optional Sailing Tools**: Independently closable Sailing progress and Sea Charting Explorer windows remain available from Window Visibility without dominating the default dashboard
 - **Player Selection**: Filter views by selected players with persistent preferences
 - **Window Management**: Configure which windows are shown/hidden with persistent preferences
 - **State Synchronization**: Window positions and states sync across browser tabs
@@ -213,15 +212,15 @@ The collection log comparison table displays all items that players have obtaine
 - **Completion Percentages**: Real-time calculation of what percentage of selected players have each item
 - **Responsive Filtering**: Dynamically updates when players are selected/deselected
 
-## Player Overview and Sailing
+## Player Overview and Optional Sailing Tools
 
 ### Player Overview
 
-The Player Overview window provides a quick status card for every selected player. Each card shows the latest snapshot time together with total level, total XP, completed quests, collection log total, completed combat achievements, and Sailing level. The cards follow the global player selection instead of adding another independent filter.
+The Player Overview window provides a quick status card for every selected player. Each card shows the latest snapshot time together with total level, total XP, completed quests, level 99s, collection log total, and completed combat achievements. The cards follow the global player selection instead of adding another independent filter.
 
 ### Sailing Progress and Sea Charting Explorer
 
-Sailing is split into two independently closable windows so the detailed data does not have to remain open beside the quick comparison:
+Sailing remains part of the generic skill charts, level comparisons, activities, and recent progress. Two deeper Sailing views are available at the end of Window Visibility and are hidden by default so the dashboard opens on whole-account OSRS progress:
 
 - **Sailing Progress**: Shows each selected player's Sailing level, completed chart count, total known charts, and an accessible progress bar
 - **Sea Charting Explorer**: Switches player, chart area, and status (`Missing`, `Completed`, or `All`); groups tasks into collapsible completion-area and sea summaries; and shows required Sailing level, chart type, bonus-chart status, hazard, task description, and relevant OSRS Wiki sea link

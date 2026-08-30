@@ -31,6 +31,8 @@ test('brand image outputs have the dimensions declared in page metadata and the 
 test('manifest, crawler policy, sitemap, and SVG favicon use stable production paths', () => {
   const manifest = JSON.parse(readFileSync(publicAsset('site.webmanifest'), 'utf8'));
   assert.equal(manifest.name, 'OSRS Tracker');
+  assert.match(manifest.description, /skills, XP, quests/);
+  assert.doesNotMatch(manifest.description, /Sailing/);
   assert.equal(manifest.start_url, '/');
   assert.equal(manifest.theme_color, '#008080');
   assert.deepEqual(

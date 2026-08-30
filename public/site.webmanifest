@@ -1,7 +1,7 @@
 {
   "name": "OSRS Tracker",
   "short_name": "OSRS Tracker",
-  "description": "Compare Old School RuneScape group progress across skills, quests, collection logs, combat achievements and Sailing sea charting.",
+  "description": "Compare Old School RuneScape group progress across skills, XP, quests, achievement diaries, combat achievements, activities and collection logs.",
   "id": "/",
   "start_url": "/",
   "scope": "/",

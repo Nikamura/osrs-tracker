@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 
 const appSource = readFileSync(new URL('../public/js/app.js', import.meta.url), 'utf8');
+const initSource = readFileSync(new URL('../public/js/init.js', import.meta.url), 'utf8');
 const appWithoutBoot = appSource.replace(
   /\nif \(document\.readyState === 'loading'\) \{[\s\S]*$/,
   ''
@@ -18,6 +19,7 @@ function createClient(html) {
     window.__clientTest = {
       loadWindowOrder,
       loadWindowVisibility,
+      renderPlayerOverview,
       renderSailingProgress,
       renderSeaChartingExplorer,
       setSailingExplorerPlayer,
@@ -39,12 +41,12 @@ function windowMarkup(id, title, introducedVersion = 1) {
   return `<div class="window"${dataId}${introduced}><div class="title-bar-text">${title}</div></div>`;
 }
 
-test('visibility state tolerates corruption and migrates newly introduced windows', () => {
+test('visibility state tolerates corruption and rebalances Sailing windows once', () => {
   const dom = createClient(`
-    <body data-window-catalog-version="2">
+    <body data-window-catalog-version="3">
       <input type="checkbox" id="window-player-overview" value="player-overview" data-introduced-version="2" checked>
-      <input type="checkbox" id="window-sailing-progress" value="sailing-progress" data-introduced-version="2" checked>
-      <input type="checkbox" id="window-sea-charting-explorer" value="sea-charting-explorer" data-introduced-version="2" checked>
+      <input type="checkbox" id="window-sailing-progress" value="sailing-progress" data-introduced-version="2">
+      <input type="checkbox" id="window-sea-charting-explorer" value="sea-charting-explorer" data-introduced-version="2">
       <input type="checkbox" id="window-quest-progress" value="quest-progress" data-introduced-version="1" checked>
       <div class="container">
         ${windowMarkup('configuration', 'Configuration')}
@@ -61,23 +63,69 @@ test('visibility state tolerates corruption and migrates newly introduced window
     localStorage.setItem('osrs-selected-windows', malformed);
     assert.doesNotThrow(() => client.loadWindowVisibility());
     assert.equal(document.querySelector('#window-player-overview').checked, true);
-    assert.equal(document.querySelector('#window-sailing-progress').checked, true);
-    assert.equal(document.querySelector('#window-sea-charting-explorer').checked, true);
+    assert.equal(document.querySelector('#window-sailing-progress').checked, false);
+    assert.equal(document.querySelector('#window-sea-charting-explorer').checked, false);
   }
 
-  localStorage.setItem('osrs-window-catalog-version', '1');
-  localStorage.setItem('osrs-selected-windows', JSON.stringify(['quest-progress']));
+  localStorage.setItem('osrs-window-catalog-version', '2');
+  localStorage.setItem('osrs-selected-windows', JSON.stringify([
+    'player-overview', 'sailing-progress', 'sea-charting-explorer', 'quest-progress'
+  ]));
   client.loadWindowVisibility();
   assert.equal(document.querySelector('#window-player-overview').checked, true);
-  assert.equal(document.querySelector('#window-sailing-progress').checked, true);
-  assert.equal(document.querySelector('#window-sea-charting-explorer').checked, true);
+  assert.equal(document.querySelector('#window-sailing-progress').checked, false);
+  assert.equal(document.querySelector('#window-sea-charting-explorer').checked, false);
   assert.equal(document.querySelector('#window-quest-progress').checked, true);
-  assert.equal(localStorage.getItem('osrs-window-catalog-version'), '2');
+  assert.equal(localStorage.getItem('osrs-window-catalog-version'), '3');
 });
 
-test('legacy window order places and persists new windows beside Configuration', () => {
+test('early initialization hides Sailing windows before the version 3 app boot', () => {
+  const dom = new JSDOM(`
+    <body data-window-catalog-version="3">
+      <div class="window" data-window-id="player-overview"></div>
+      <div class="window" data-window-id="sailing-progress" data-introduced-version="2"></div>
+      <div class="window" data-window-id="sea-charting-explorer" data-introduced-version="2"></div>
+    </body>`, {
+    runScripts: 'outside-only',
+    url: 'https://tracker.test/'
+  });
+  dom.window.localStorage.setItem('osrs-window-catalog-version', '2');
+  dom.window.localStorage.setItem('osrs-selected-windows', JSON.stringify([
+    'player-overview', 'sailing-progress', 'sea-charting-explorer'
+  ]));
+
+  dom.window.eval(initSource);
+
+  assert.equal(dom.window.document.querySelector('[data-window-id="player-overview"]').classList.contains('hidden'), false);
+  assert.equal(dom.window.document.querySelector('[data-window-id="sailing-progress"]').classList.contains('hidden'), true);
+  assert.equal(dom.window.document.querySelector('[data-window-id="sea-charting-explorer"]').classList.contains('hidden'), true);
+  assert.deepEqual(JSON.parse(dom.window.localStorage.getItem('osrs-selected-windows')), ['player-overview']);
+});
+
+test('first-visit defaults hide optional Sailing windows before app boot', () => {
+  const dom = new JSDOM(`
+    <body data-window-catalog-version="3">
+      <input type="checkbox" id="window-player-overview" value="player-overview" checked>
+      <input type="checkbox" id="window-sailing-progress" value="sailing-progress">
+      <input type="checkbox" id="window-sea-charting-explorer" value="sea-charting-explorer">
+      <div class="window" data-window-id="player-overview"></div>
+      <div class="window" data-window-id="sailing-progress"></div>
+      <div class="window" data-window-id="sea-charting-explorer"></div>
+    </body>`, {
+    runScripts: 'outside-only',
+    url: 'https://tracker.test/'
+  });
+
+  dom.window.eval(initSource);
+
+  assert.equal(dom.window.document.querySelector('[data-window-id="player-overview"]').classList.contains('hidden'), false);
+  assert.equal(dom.window.document.querySelector('[data-window-id="sailing-progress"]').classList.contains('hidden'), true);
+  assert.equal(dom.window.document.querySelector('[data-window-id="sea-charting-explorer"]').classList.contains('hidden'), true);
+});
+
+test('version 3 window order moves Sailing tools behind the general tracker', () => {
   const dom = createClient(`
-    <body data-window-catalog-version="2">
+    <body data-window-catalog-version="3">
       <div class="container">
         ${windowMarkup('configuration', 'Configuration')}
         ${windowMarkup('player-overview', 'Player Overview', 2)}
@@ -87,20 +135,54 @@ test('legacy window order places and persists new windows beside Configuration',
       </div>
     </body>`);
   const { localStorage, document } = dom.window;
-  localStorage.setItem('osrs-window-catalog-version', '1');
-  localStorage.setItem('osrs-window-order', JSON.stringify(['configuration', 'quest-progress']));
+  localStorage.setItem('osrs-window-catalog-version', '2');
+  localStorage.setItem('osrs-window-order', JSON.stringify([
+    'configuration', 'player-overview', 'sailing-progress', 'sea-charting-explorer', 'quest-progress'
+  ]));
 
   dom.window.__clientTest.loadWindowOrder();
   const order = [...document.querySelectorAll('.container > .window')]
     .map(element => element.querySelector('.title-bar-text').textContent);
-  assert.deepEqual(order, ['Configuration', 'Player Overview', 'Sailing Progress', 'Sea Charting Explorer', 'Quest Progress']);
+  assert.deepEqual(order, ['Configuration', 'Player Overview', 'Quest Progress', 'Sailing Progress', 'Sea Charting Explorer']);
   assert.deepEqual(JSON.parse(localStorage.getItem('osrs-window-order')), [
     'configuration',
     'player-overview',
+    'quest-progress',
     'sailing-progress',
-    'sea-charting-explorer',
-    'quest-progress'
+    'sea-charting-explorer'
   ]);
+});
+
+test('player overview uses general account metrics instead of spotlighting Sailing', () => {
+  const dom = createClient(`
+    <body>
+      <input type="checkbox" id="player-alpha" value="alpha" checked>
+      <div id="player-overview-container"></div>
+    </body>`);
+  const client = dom.window.__clientTest;
+  client.setData({
+    playerOverview: {
+      players: ['alpha'],
+      totals: { quests: 211, combatAchievements: 655 },
+      playerStats: {
+        alpha: {
+          snapshotAt: '2026-08-30T10:00:00.000Z',
+          totalLevel: 2000,
+          totalExperience: 100_000_000,
+          completedQuests: 200,
+          maxedSkills: 5,
+          collectionLog: 300,
+          combatAchievements: 100
+        }
+      }
+    }
+  });
+
+  client.renderPlayerOverview(['alpha']);
+
+  const overviewText = dom.window.document.querySelector('#player-overview-container').textContent;
+  assert.match(overviewText, /Level 99s/);
+  assert.doesNotMatch(overviewText, /Sailing/);
 });
 
 test('Sailing filters retain focus and collapse completion groups by default', () => {

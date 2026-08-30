@@ -45,14 +45,14 @@ function seaChartingTasks(count = 358) {
   });
 }
 
-test('player overview and Sailing progress distinguish known, unknown, and unavailable data', () => {
+test('player overview stays general while Sailing progress distinguishes live data states', () => {
   const tasks = seaChartingTasks(4);
   const playerDataMap = {
     alpha: {
       latestFile: 'alpha_2026-08-22T10:15:00.000Z.json',
       latestData: {
         quests: { 'Quest 0': 2, 'Fallen From Grace': 1, 'Unknown Quest': 2 },
-        levels: { Sailing: 62, Attack: 70 },
+        levels: { Sailing: 62, Attack: 99 },
         skills: [{ name: 'Overall', xp: 1_234_567 }],
         activities: [{ name: 'Collections Logged', score: 9 }],
         collection_log: [10, 11],
@@ -82,20 +82,18 @@ test('player overview and Sailing progress distinguish known, unknown, and unava
   assert.deepEqual(overview.players, ['alpha', 'beta']);
   assert.deepEqual(overview.totals, {
     quests: 2,
-    combatAchievements: 3,
-    seaCharting: 4
+    combatAchievements: 3
   });
   assert.deepEqual(overview.playerStats.alpha, {
     snapshotAt: '2026-08-22T10:15:00.000Z',
-    totalLevel: 132,
+    totalLevel: 161,
     totalExperience: 1_234_567,
     completedQuests: 1,
-    sailingLevel: 62,
-    seaCharting: 3,
+    maxedSkills: 1,
     collectionLog: 9,
     combatAchievements: 2
   });
-  assert.equal(overview.playerStats.beta.seaCharting, null);
+  assert.equal(overview.playerStats.beta.maxedSkills, 0);
 
   const sailing = getSailingProgressData(playerDataMap, tasks);
   assert.equal(sailing.totalTasks, 4);
@@ -184,6 +182,9 @@ test('fresh generation works and includes Sailing-era progress', async () => {
     assert.equal(emptyDashboardDocument.querySelector('link[rel="apple-touch-icon"]')?.href, '/apple-touch-icon.png');
     assert.ok(emptyDashboardDocument.querySelector('link[rel="icon"][href="/favicon.svg"]'));
     assert.equal(emptyDashboardDocument.querySelector('h1')?.textContent, SITE_METADATA.name);
+    assert.doesNotMatch(SITE_METADATA.title, /Sailing/);
+    assert.doesNotMatch(SITE_METADATA.description, /Sailing/);
+    assert.doesNotMatch(emptyDashboardDocument.querySelector('.site-intro-copy')?.textContent || '', /Sailing/);
     assert.ok(emptyDashboardDocument.querySelector('main.container'));
     assert.match(
       emptyDashboardDocument.querySelector('.site-attribution')?.textContent || '',
@@ -196,19 +197,22 @@ test('fresh generation works and includes Sailing-era progress', async () => {
     assert.equal(structuredData['@type'], 'WebSite');
     assert.equal(structuredData.url, SITE_METADATA.canonicalUrl);
     assert.equal(structuredData.name, SITE_METADATA.name);
-    assert.equal(emptyDashboardDocument.body.dataset.windowCatalogVersion, '2');
+    assert.equal(emptyDashboardDocument.body.dataset.windowCatalogVersion, '3');
     for (const windowId of ['player-overview', 'sailing-progress', 'sea-charting-explorer']) {
       const checkbox = emptyDashboardDocument.querySelector(`#window-${windowId}`);
       const windowElement = emptyDashboardDocument.querySelector(`[data-window-id="${windowId}"]`);
       assert.ok(checkbox, `${windowId} visibility control should exist`);
       assert.equal(checkbox.dataset.introducedVersion, '2');
-      assert.equal(checkbox.checked, true);
+      assert.equal(checkbox.checked, windowId === 'player-overview');
       assert.ok(windowElement, `${windowId} window should exist`);
       assert.equal(windowElement.dataset.introducedVersion, '2');
     }
     assert.ok(emptyDashboardDocument.querySelector('#player-overview-container'));
     assert.ok(emptyDashboardDocument.querySelector('#sailing-progress-container'));
     assert.ok(emptyDashboardDocument.querySelector('#sea-charting-explorer-container'));
+    const windowIds = [...emptyDashboardDocument.querySelectorAll('.window[data-window-id]')]
+      .map(windowElement => windowElement.dataset.windowId);
+    assert.deepEqual(windowIds.slice(-2), ['sailing-progress', 'sea-charting-explorer']);
 
     const timestamp = '2026-08-22T10:00:00.000Z';
     const injectedSkillName = '"><img src=x onerror=alert(1)>';
@@ -242,9 +246,7 @@ test('fresh generation works and includes Sailing-era progress', async () => {
 
     const progressedTableData = JSON.parse(readFileSync('public/data/table-data.json', 'utf8'));
     assert.equal(progressedTableData.activities.playerActivities.tester['Sea charting tasks'], 3);
-    assert.equal(progressedTableData.playerOverview.totals.seaCharting, 358);
-    assert.equal(progressedTableData.playerOverview.playerStats.tester.sailingLevel, 42);
-    assert.equal(progressedTableData.playerOverview.playerStats.tester.seaCharting, 3);
+    assert.equal(progressedTableData.playerOverview.playerStats.tester.maxedSkills, 0);
     assert.equal(progressedTableData.sailing.totalTasks, 358);
     assert.deepEqual(progressedTableData.sailing.playerProgress.tester.completedTaskIds, [1, 2, 3]);
     assert.deepEqual(progressedTableData.sailing.playerProgress.tester.unknownTaskIds, []);

@@ -18,12 +18,12 @@ import {
 
 export const SITE_METADATA = Object.freeze({
   name: 'OSRS Tracker',
-  title: 'OSRS Tracker — Group Progress, Sailing & Collection Logs',
-  description: 'Compare Old School RuneScape group progress across skills, quests, collection logs, combat achievements and Sailing sea charting.',
+  title: 'OSRS Tracker — Group Progress Dashboard',
+  description: 'Compare Old School RuneScape group progress across skills, XP, quests, achievement diaries, combat achievements, activities and collection logs.',
   canonicalUrl: 'https://osrs-tracker.cn.lt/',
   locale: 'en_GB',
   socialImageUrl: 'https://osrs-tracker.cn.lt/og/osrs-tracker-card-v1.png',
-  socialImageAlt: 'A Windows 98-style OSRS Tracker dashboard with player progress and Sailing windows.'
+  socialImageAlt: 'A Windows 98-style OSRS Tracker dashboard comparing group progress across Gielinor.'
 });
 
 const SITE_STRUCTURED_DATA = JSON.stringify({
@@ -225,7 +225,6 @@ export function getPlayerOverviewData(playerDataMap, gameData) {
   const knownQuestNames = gameData.knownQuestNames || new Set();
   const totalQuests = knownQuestNames.size;
   const totalCombatAchievements = Object.keys(gameData.combatAchievements || {}).length;
-  const totalSeaChartingTasks = gameData.seaChartingTasks?.length || 0;
   const players = {};
 
   for (const [player, playerInfo] of Object.entries(playerDataMap)) {
@@ -235,17 +234,13 @@ export function getPlayerOverviewData(playerDataMap, gameData) {
       status === 2 && (knownQuestNames.size === 0 || knownQuestNames.has(questName))
     ).length;
     const levels = Object.values(data.levels || {}).filter(Number.isFinite);
-    const seaCharting = Array.isArray(data.sea_charting)
-      ? new Set(data.sea_charting.filter(Number.isInteger)).size
-      : null;
 
     players[player] = {
       snapshotAt: parseSnapshotTimestamp(playerInfo.latestFile).toISOString(),
       totalLevel: levels.reduce((sum, level) => sum + level, 0),
       totalExperience: getOverallExperience(data),
       completedQuests,
-      sailingLevel: Number.isFinite(data.levels?.Sailing) ? data.levels.Sailing : null,
-      seaCharting,
+      maxedSkills: levels.filter(level => level === 99).length,
       collectionLog: getCollectionLogTotal(data),
       combatAchievements: new Set((data.combat_achievements || []).filter(Number.isInteger)).size
     };
@@ -256,8 +251,7 @@ export function getPlayerOverviewData(playerDataMap, gameData) {
     playerStats: players,
     totals: {
       quests: totalQuests,
-      combatAchievements: totalCombatAchievements,
-      seaCharting: totalSeaChartingTasks
+      combatAchievements: totalCombatAchievements
     }
   };
 }
@@ -1012,8 +1006,6 @@ function generatePlayerSelectionUI(players) {
 function generateWindowVisibilityUI() {
   const windows = [
     { id: 'player-overview', name: 'Player Overview', enabled: true, introducedVersion: 2 },
-    { id: 'sailing-progress', name: 'Sailing Progress', enabled: true, introducedVersion: 2 },
-    { id: 'sea-charting-explorer', name: 'Sea Charting Explorer', enabled: true, introducedVersion: 2 },
     { id: 'quest-progress', name: 'Quest Progress', enabled: true },
     { id: 'total-level-progress', name: 'Total Level Progress', enabled: true },
     { id: 'total-exp-progress', name: 'Total XP Progress', enabled: true },
@@ -1025,7 +1017,9 @@ function generateWindowVisibilityUI() {
     { id: 'music-tracks-comparison', name: 'Music Tracks Comparison', enabled: true },
     { id: 'collection-log-comparison', name: 'Collection Log Comparison', enabled: true },
     { id: 'activities-comparison', name: 'Activities Comparison', enabled: true },
-    { id: 'recent-achievements--progress', name: 'Recent Achievements & Progress', enabled: true }
+    { id: 'recent-achievements--progress', name: 'Recent Achievements & Progress', enabled: true },
+    { id: 'sailing-progress', name: 'Sailing Progress', enabled: false, introducedVersion: 2 },
+    { id: 'sea-charting-explorer', name: 'Sea Charting Explorer', enabled: false, introducedVersion: 2 }
   ];
 
   let visibilityHtml = '<div class="window-visibility">';
@@ -1272,7 +1266,7 @@ export async function generateStaticHTML() {
   <!-- 100% privacy-first analytics -->
   <script data-collect-dnt="true" async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
 </head>
-<body class="loading" data-version="${dataVersion}" data-window-catalog-version="2" style="background-color: #008080;">
+<body class="loading" data-version="${dataVersion}" data-window-catalog-version="3" style="background-color: #008080;">
   <noscript><img src="https://queue.simpleanalyticscdn.com/noscript.gif?collect-dnt=true" alt="" referrerpolicy="no-referrer-when-downgrade"/></noscript>
   <!-- Loading screen -->
   <div class="loading-screen" id="loadingScreen">
@@ -1297,7 +1291,7 @@ export async function generateStaticHTML() {
           <img class="site-intro-icon" src="/favicon.svg" width="48" height="48" alt="">
           <div class="site-intro-copy">
             <h1>OSRS Tracker</h1>
-            <p>Compare the crew across quests, levels, achievements, collection logs and Sailing.</p>
+            <p>Compare the crew across skills, XP, quests, achievements, activities and collection logs.</p>
           </div>
         </header>
         <p class="site-attribution">Created using intellectual property belonging to Jagex Limited under the terms of Jagex's Fan Content Policy. This content is not endorsed by or affiliated with Jagex. <a href="https://legal.jagex.com/docs/policies/fan-content-policy" target="_blank" rel="noopener noreferrer">Read the policy</a>.</p>
@@ -1315,30 +1309,6 @@ export async function generateStaticHTML() {
       </div>
       <div class="window-body">
         <div id="player-overview-container"></div>
-      </div>
-    </div>
-    <div class="window main-window" data-window-id="sailing-progress" data-introduced-version="2">
-      <div class="title-bar">
-        <div class="title-bar-text">Sailing Progress</div>
-        <div class="title-bar-controls">
-          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
-          <button aria-label="Close" onclick="closeWindow(this)"></button>
-        </div>
-      </div>
-      <div class="window-body">
-        <div id="sailing-progress-container"></div>
-      </div>
-    </div>
-    <div class="window main-window" data-window-id="sea-charting-explorer" data-introduced-version="2">
-      <div class="title-bar">
-        <div class="title-bar-text">Sea Charting Explorer</div>
-        <div class="title-bar-controls">
-          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
-          <button aria-label="Close" onclick="closeWindow(this)"></button>
-        </div>
-      </div>
-      <div class="window-body">
-        <div id="sea-charting-explorer-container"></div>
       </div>
     </div>
     <div class="window main-window" data-window-id="quest-progress">
@@ -1502,6 +1472,30 @@ export async function generateStaticHTML() {
       </div>
       <div class="window-body">
         <div id="achievements-table-container"></div>
+      </div>
+    </div>
+    <div class="window main-window" data-window-id="sailing-progress" data-introduced-version="2">
+      <div class="title-bar">
+        <div class="title-bar-text">Sailing Progress</div>
+        <div class="title-bar-controls">
+          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
+          <button aria-label="Close" onclick="closeWindow(this)"></button>
+        </div>
+      </div>
+      <div class="window-body">
+        <div id="sailing-progress-container"></div>
+      </div>
+    </div>
+    <div class="window main-window" data-window-id="sea-charting-explorer" data-introduced-version="2">
+      <div class="title-bar">
+        <div class="title-bar-text">Sea Charting Explorer</div>
+        <div class="title-bar-controls">
+          <button aria-label="Minimize" onclick="toggleWindow(this)"></button>
+          <button aria-label="Close" onclick="closeWindow(this)"></button>
+        </div>
+      </div>
+      <div class="window-body">
+        <div id="sea-charting-explorer-container"></div>
       </div>
     </div>
   </main>

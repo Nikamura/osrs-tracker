@@ -24,17 +24,38 @@
     }
 
     // Apply window visibility immediately
-    const selectedWindows = storedStringArray('osrs-selected-windows');
+    let selectedWindows = storedStringArray('osrs-selected-windows');
     if (selectedWindows) {
       const storedCatalogVersion = Number(localStorage.getItem('osrs-window-catalog-version'));
       const seenCatalogVersion = Number.isInteger(storedCatalogVersion) && storedCatalogVersion >= 1
         ? storedCatalogVersion
         : 1;
+      const configuredCatalogVersion = Number(document.body.dataset.windowCatalogVersion);
+      const currentCatalogVersion = Number.isInteger(configuredCatalogVersion) && configuredCatalogVersion >= 1
+        ? configuredCatalogVersion
+        : 1;
+      if (seenCatalogVersion < 3 && currentCatalogVersion >= 3) {
+        selectedWindows = selectedWindows.filter(windowId =>
+          windowId !== 'sailing-progress' && windowId !== 'sea-charting-explorer'
+        );
+        localStorage.setItem('osrs-selected-windows', JSON.stringify(selectedWindows));
+      }
       const allWindows = document.querySelectorAll('.window[data-window-id]');
       allWindows.forEach(function(windowElement) {
         const windowId = windowElement.dataset.windowId;
         const introducedVersion = Number(windowElement.dataset.introducedVersion || 1);
         if (selectedWindows.indexOf(windowId) === -1 && introducedVersion <= seenCatalogVersion) {
+          windowElement.classList.add('hidden');
+        }
+      });
+    } else {
+      const defaultWindows = Array.from(
+        document.querySelectorAll('input[type="checkbox"][id^="window-"]:checked')
+      ).map(function(checkbox) {
+        return checkbox.value;
+      });
+      document.querySelectorAll('.window[data-window-id]').forEach(function(windowElement) {
+        if (defaultWindows.indexOf(windowElement.dataset.windowId) === -1) {
           windowElement.classList.add('hidden');
         }
       });

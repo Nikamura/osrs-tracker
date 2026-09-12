@@ -1,6 +1,6 @@
-// WikiSync's Cloudflare policy rejects the legacy `(+https://...)` form.
-// Keep this descriptive and contactable as requested by the RuneScape Wiki API policy.
-const DEFAULT_USER_AGENT = 'osrs-tracker/1.1.0 (https://github.com/Nikamura/osrs-tracker; contact: GitHub @Nikamura)';
+// Keep requests descriptive and contactable. This form was verified against
+// WikiSync after the previous identifier began returning HTTP 403 in September 2026.
+const DEFAULT_USER_AGENT = 'OSRS Group Progress Tracker/1.1.0 (https://github.com/Nikamura/osrs-tracker)';
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 export const USER_AGENT = process.env.OSRS_TRACKER_USER_AGENT || DEFAULT_USER_AGENT;

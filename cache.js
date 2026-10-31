@@ -143,7 +143,16 @@ export function* loadAllSnapshotsForPlayer(playerInfo) {
   const { playerDir, allFiles } = playerInfo;
   for (const file of allFiles) {
     const filePath = path.join(playerDir, file);
-    const data = JSON.parse(readFileSync(filePath, "utf-8"));
+    let data;
+    try {
+      data = JSON.parse(readFileSync(filePath, "utf-8"));
+    } catch (error) {
+      // Keep the original snapshot for recovery; one damaged historical file
+      // must not prevent every player's dashboard from refreshing.
+      if (!(error instanceof SyntaxError)) throw error;
+      console.warn(`Skipping invalid snapshot ${filePath}: ${error.message}`);
+      continue;
+    }
     yield { filename: file, data };
   }
 }
@@ -182,7 +191,16 @@ export function* loadNewSnapshotsForPlayer(playerInfo, cachedLatestFile) {
 
   for (const file of filesToLoad) {
     const filePath = path.join(playerDir, file);
-    const data = JSON.parse(readFileSync(filePath, "utf-8"));
+    let data;
+    try {
+      data = JSON.parse(readFileSync(filePath, "utf-8"));
+    } catch (error) {
+      // Keep the original snapshot for recovery; one damaged historical file
+      // must not prevent every player's dashboard from refreshing.
+      if (!(error instanceof SyntaxError)) throw error;
+      console.warn(`Skipping invalid snapshot ${filePath}: ${error.message}`);
+      continue;
+    }
     yield { filename: file, data };
   }
 }

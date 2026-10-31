@@ -216,7 +216,8 @@ test('fresh generation works and includes Sailing-era progress', async () => {
       .map(windowElement => windowElement.dataset.windowId);
     assert.deepEqual(windowIds.slice(-2), ['sailing-progress', 'sea-charting-explorer']);
 
-    const timestamp = '2026-08-22T10:00:00.000Z';
+    const snapshotTime = Date.now() - 30 * 60_000;
+    const timestamp = new Date(snapshotTime).toISOString();
     const injectedSkillName = '"><img src=x onerror=alert(1)>';
     const snapshot = {
       quests: Object.fromEntries(quests.map(quest => [quest.name === 'Fallen From Grace' ? '.' : quest.name, 0])),
@@ -238,7 +239,7 @@ test('fresh generation works and includes Sailing-era progress', async () => {
     assert.ok(tableData.quests.quests.includes('Fallen From Grace'));
     assert.ok(tableData.musicTracks.musicTracks.includes('Wings of Madness'));
 
-    const progressedTimestamp = '2026-08-22T10:15:00.000Z';
+    const progressedTimestamp = new Date(snapshotTime + 15 * 60_000).toISOString();
     const progressedSnapshot = structuredClone(snapshot);
     progressedSnapshot.quests['Quest 0'] = 2;
     progressedSnapshot.sea_charting = [1, 2, 3];
@@ -264,7 +265,7 @@ test('fresh generation works and includes Sailing-era progress', async () => {
 
     // A cleanup can remove the file named in the incremental cache. Rebuilding
     // from the remaining history must not duplicate already cached achievements.
-    const duplicateTimestamp = '2026-08-22T10:30:00.000Z';
+    const duplicateTimestamp = new Date(snapshotTime + 30 * 60_000).toISOString();
     const duplicatePath = `player_data/tester/tester_${duplicateTimestamp}.json`;
     writeJson(duplicatePath, progressedSnapshot);
     await generateStaticHTML();

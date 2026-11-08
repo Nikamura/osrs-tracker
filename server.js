@@ -73,12 +73,12 @@ export function createApp({
       directives: {
         defaultSrc: ["'self'"],
         baseUri: ["'self'"],
-        connectSrc: ["'self'", 'https://queue.simpleanalyticscdn.com'],
+        connectSrc: ["'self'", 'https://osrs-stats.cn.lt'],
         fontSrc: ["'self'", 'data:', 'https://unpkg.com'],
         frameAncestors: ["'none'"],
-        imgSrc: ["'self'", 'data:', 'https://oldschool.runescape.wiki', 'https://queue.simpleanalyticscdn.com'],
+        imgSrc: ["'self'", 'data:', 'https://oldschool.runescape.wiki', 'https://osrs-stats.cn.lt'],
         objectSrc: ["'none'"],
-        scriptSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://scripts.simpleanalyticscdn.com'],
+        scriptSrc: ["'self'", 'https://cdn.jsdelivr.net', 'https://osrs-stats.cn.lt'],
         scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
         upgradeInsecureRequests: []

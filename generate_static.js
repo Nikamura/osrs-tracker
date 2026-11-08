@@ -1256,11 +1256,10 @@ export async function generateStaticHTML() {
   <script type="application/ld+json">${SITE_STRUCTURED_DATA}</script>
   <link rel="stylesheet" href="styles.css">
   <script src="/vendor/echarts-6.0.0.min.js"></script>
-  <!-- 100% privacy-first analytics -->
-  <script data-collect-dnt="true" async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
+  <!-- Self-hosted, cookie-free analytics -->
+  <script data-goatcounter="https://osrs-stats.cn.lt/count" async src="https://osrs-stats.cn.lt/count.js"></script>
 </head>
 <body class="loading" data-version="${dataVersion}" data-window-catalog-version="4" data-layout="wiki">
-  <noscript><img src="https://queue.simpleanalyticscdn.com/noscript.gif?collect-dnt=true" alt="" referrerpolicy="no-referrer-when-downgrade"/></noscript>
   <!-- Loading screen -->
   <div class="loading-screen" id="loadingScreen">
     <div class="loading-content">

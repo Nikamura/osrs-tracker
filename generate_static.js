@@ -1257,7 +1257,7 @@ export async function generateStaticHTML() {
   <link rel="stylesheet" href="styles.css">
   <script src="/vendor/echarts-6.0.0.min.js"></script>
   <!-- Self-hosted, cookie-free analytics -->
-  <script data-goatcounter="https://osrs-stats.cn.lt/count" async src="https://osrs-stats.cn.lt/count.js"></script>
+  <script data-goatcounter="/stats/count" async src="/stats/count.js"></script>
 </head>
 <body class="loading" data-version="${dataVersion}" data-window-catalog-version="4" data-layout="wiki">
   <!-- Loading screen -->
